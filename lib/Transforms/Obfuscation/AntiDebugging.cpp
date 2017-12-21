@@ -1,5 +1,5 @@
 /*
- *  LLVM SymbolObfuscation Pass
+ *  LLVM AntiDebugging Pass
  *  https://github.com/Naville
  *  GPL V3 Licensed
  */
