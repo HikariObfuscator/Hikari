@@ -46,6 +46,7 @@
 #include "llvm/Transforms/Obfuscation/Substitution.h"
 #include "llvm/Transforms/Obfuscation/Split.h"
 #include "llvm/Transforms/Obfuscation/AntiDebugging.h"
+#include "llvm/Transforms/Obfuscation/AntiClassDump.h"
 using namespace llvm;
 
 static cl::opt<bool>
@@ -923,6 +924,7 @@ void PassManagerBuilder::populateThinLTOPassManager(
 
 void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
     addSymbolObfPass(PM);
+    addAntiClassDumpPass(PM);
     addFunctionCallObfuscatePass(PM);
   if (LibraryInfo)
     PM.add(new TargetLibraryInfoWrapperPass(*LibraryInfo));
