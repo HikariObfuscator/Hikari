@@ -1,7 +1,10 @@
 /*
- *  LLVM SymbolObfuscation Pass
+ *  LLVM AntiClassDump Pass
  *  https://github.com/Naville
  *  GPL V3 Licensed
+ *  Note we only aim to support Darwin ObjC. GNUStep and other implementations
+ *  are not considered
+ *  See HikariProject's blog for details
  */
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -229,11 +232,6 @@ struct AntiClassDump : public ModulePass {
     assert(GV->hasInitializer() &&
            "ObjC Class Structure's Initializer Missing");
     ConstantStruct *CS = dyn_cast<ConstantStruct>(GV->getInitializer());
-    /*
-    According to ObjC Documentations.The correct method to dynamically create a
-    new class is: Allocate Class. Add Ivar&Props. Register Class.Notice
-    MetaClass is only available after registering Add Methods
-    */
     StringRef ClassName = GV->getName();
     ClassName = ClassName.substr(strlen("OBJC_CLASS_$_"));
     StringRef SuperClassName = CS->getOperand(1)->getName();
