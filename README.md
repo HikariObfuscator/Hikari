@@ -20,8 +20,9 @@ enable-subobf Enable Instruction Substitution
 enable-allobf Enable All Non-LTO Obfuscation  
 enable-adb Enable AntiDebugging Mechanisms
 ```
-An example of invoking everything from command line would be:  
-``/PATH/TO/OUR/clang -mllvm -enable-allobf -Xlinker -mllvm -Xlinker -enable-fco main.m -flto``
+An example of invoking everything from command line would be:    
+``/PATH/TO/OUR/clang -mllvm -enable-allobf -Xlinker -mllvm -Xlinker -enable-fco main.m -flto``  
+For Xcode, add something like ``-Wl,-mllvm,-enable-fco`` to ``Other linker flags``
 
 # TODO
 - StringEncryption
