@@ -18,11 +18,13 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "llvm/ADT/Triple.h"
 #include <algorithm>
 #include <cstdlib>
 #include <deque>
 #include <iostream>
 #include <string>
+#include <cassert>
 using namespace llvm;
 using namespace std;
 static cl::opt<bool>
@@ -34,6 +36,13 @@ struct AntiClassDump : public ModulePass {
   AntiClassDump() : ModulePass(ID) {}
   virtual bool doInitialization(Module &M) override {
     // Basic Defs
+    Triple tri(M.getTargetTriple());
+    if(tri.getVendor ()!=Triple::VendorType::Apple){
+      //We only support AAPL's ObjC Implementation ATM
+        errs() << M.getTargetTriple()
+               << " is Not Supported For LLVM AntiClassDump\nProbably GNU Step?\n";
+      return false;
+    }
     Type *Int64Ty = Type::getInt64Ty(M.getContext());
     Type *Int32Ty = Type::getInt32Ty(M.getContext());
     Type *Int8PtrTy = Type::getInt8PtrTy(M.getContext());
@@ -89,9 +98,7 @@ struct AntiClassDump : public ModulePass {
     vector<Type *> allocaClsTypeVector;
     allocaClsTypeVector.push_back(Int8PtrTy);
     allocaClsTypeVector.push_back(Int8PtrTy);
-    if (M.getTargetTriple().compare(0, strlen("arm64-apple-ios"),
-                                    "arm64-apple-ios") == 0 ||
-        M.getTargetTriple().find("x86_64-apple-macosx") != string::npos) {
+    if (tri.isArch64Bit ()) {
       // We are 64Bit Device
       allocaClsTypeVector.push_back(Int64Ty);
       M.getOrInsertFunction("class_addIvar", class_addIvar_attr,
@@ -103,8 +110,7 @@ struct AntiClassDump : public ModulePass {
                             Int8PtrTy,
                             objc_property_attribute_t_type->getPointerTo(),
                             Int64Ty); // objc_property_attribute_t_type is NULL?
-    } else if (M.getTargetTriple().find("-apple-ios") != string::npos ||
-               M.getTargetTriple().find("-apple-macosx") != string::npos) {
+    } else{
       // Not 64Bit.However we are still on apple platform.So We are
       // ARMV7/ARMV7S/i386
       // PowerPC is ignored, feel free to open a PR if you want to
@@ -117,10 +123,6 @@ struct AntiClassDump : public ModulePass {
           "class_addProperty", class_addProperty_attr,
           Type::getInt8Ty(M.getContext()), Int8PtrTy, Int8PtrTy,
           objc_property_attribute_t_type->getPointerTo(), Int32Ty);
-    } else {
-      errs() << M.getTargetTriple()
-             << " is Not Supported For LLVM AntiClassDump\nProbably GNU Step?";
-      return true;
     }
     FunctionType *allocaClsType = FunctionType::get(
         Int8PtrTy, ArrayRef<Type *>(allocaClsTypeVector), false);
@@ -137,22 +139,12 @@ struct AntiClassDump : public ModulePass {
     BasicBlock *EntryBB = BasicBlock::Create(M.getContext(), "", Initializer);
     IRBuilder<> IRB(EntryBB);
     //
-    if (OLCGV == NULL) {
-      errs() << "OBJC_LABEL_CLASS_$ Not Found in IR.\nIs the target using "
-                "unsupported legacy runtime?\n";
-      return false;
-    }
-    if (!OLCGV->hasInitializer()) {
-      errs() << "OBJC_LABEL_CLASS_$ Doesn't Have Initializer\n";
-      return false;
-    }
+    assert(OLCGV != NULL && "OBJC_LABEL_CLASS_$ Missing.");
+    assert(OLCGV->hasInitializer() && "OBJC_LABEL_CLASS_$ Doesn't Have Initializer.");
     ConstantArray *OBJC_LABEL_CLASS_CDS =
         dyn_cast<ConstantArray>(OLCGV->getInitializer());
-    if (!OBJC_LABEL_CLASS_CDS) {
-      errs() << "OBJC_LABEL_CLASS_$ Not ConstantArray.\nIs the target using "
-                "unsupported legacy runtime?\n";
-      return false;
-    }
+
+    assert(OBJC_LABEL_CLASS_CDS && "OBJC_LABEL_CLASS_$ Not ConstantArray.Is the target using unsupported legacy runtime?");
     vector<string> readyclses; // This is for storing classes that can be used
                                // in handleClass()
     deque<string> tmpclses;    // This is temporary storage for classes
@@ -272,7 +264,7 @@ struct AntiClassDump : public ModulePass {
     // Note that class_ro_t's structure is different for 32 and 64bit runtime
     if (ConstantStruct *CS =
             dyn_cast<ConstantStruct>(class_ro->getInitializer())) {
-      HandlePropertyIvar(CS, IRB, M);
+      HandlePropertyIvar(CS, IRB, M,Class);
     }
     IRB->CreateCall(objc_registerClassPair, {Class});
     // FIXME:Fix ro flags
@@ -280,7 +272,7 @@ struct AntiClassDump : public ModulePass {
     // TODO:Add Methods
   }
   void HandlePropertyIvar(ConstantStruct *class_ro, IRBuilder<> *IRB,
-                          Module *M) {
+                          Module *M,Value* Class) {
     StructType *objc_property_attribute_t_type = reinterpret_cast<StructType *>(
         M->getTypeByName("struct.objc_property_attribute_t"));
     Function *class_addProperty = M->getFunction("class_addProperty");
@@ -326,7 +318,55 @@ struct AntiClassDump : public ModulePass {
     // End Struct Loading
     //The ConstantExprs are actually BitCasts
     //We need to extract correct operands,which point to corresponding GlobalVariable
-
+    if(ivar_list!=NULL){
+      GlobalVariable* GV=dyn_cast<GlobalVariable>(ivar_list->getOperand(0));
+      assert(GV&& "_OBJC_$_INSTANCE_VARIABLES Missing");
+      assert(GV->hasInitializer() && "_OBJC_$_INSTANCE_VARIABLES Missing Initializer");
+      ConstantArray *ivarArray=dyn_cast<ConstantArray>(GV->getInitializer()->getOperand(2));
+      for(unsigned i=0;i<ivarArray->getNumOperands();i++){
+        //struct _ivar_t
+        ConstantStruct* ivar=dyn_cast<ConstantStruct>(ivarArray->getOperand(i));
+        ConstantExpr* GEPName=dyn_cast<ConstantExpr>(ivar->getOperand(1));
+        ConstantExpr* GEPType=dyn_cast<ConstantExpr>(ivar->getOperand(2));
+        uint64_t alignment_junk=dyn_cast<ConstantInt>(ivar->getOperand(3))->getZExtValue () ;
+        uint64_t size_junk=dyn_cast<ConstantInt>(ivar->getOperand(4))->getZExtValue () ;
+        //Note alignment and size are int32 on both 32/64bit Target
+        //However ObjC APIs take size_t argument, which is platform dependent.WTF Apple?
+        //We need to re-create ConstantInt with correct type so we can pass verifier
+        //Instead of doing Triple Switching Again.Let's extract type from function definition
+        Constant* size=ConstantInt::get(class_addIvar->getFunctionType()->getParamType(2),size_junk);
+        Constant* alignment=ConstantInt::get(class_addIvar->getFunctionType()->getParamType(3),alignment_junk);
+        vector<Value*> addIvar_args;
+        addIvar_args.push_back(Class);
+        addIvar_args.push_back(GEPName);
+        addIvar_args.push_back(size);
+        addIvar_args.push_back(alignment);
+        addIvar_args.push_back(GEPType);
+        IRB->CreateCall(class_addIvar,ArrayRef<Value*>(addIvar_args));
+      }
+    }
+    if(property_list!=NULL){
+      GlobalVariable* GV=dyn_cast<GlobalVariable>(property_list->getOperand(0));
+      assert(GV&& "OBJC_$_PROP_LIST Missing");
+      assert(GV->hasInitializer() && "OBJC_$_PROP_LIST Missing Initializer");
+      ConstantArray *propArray=dyn_cast<ConstantArray>(GV->getInitializer()->getOperand(2));
+      for(unsigned i=0;i<propArray->getNumOperands();i++){
+        //struct _prop_t
+        ConstantStruct* prop=dyn_cast<ConstantStruct>(propArray->getOperand(i));
+        ConstantExpr* GEPName=dyn_cast<ConstantExpr>(prop->getOperand(0));
+        ConstantExpr* GEPAttri=dyn_cast<ConstantExpr>(prop->getOperand(1));
+        GlobalVariable *AttrGV=dyn_cast<GlobalVariable>(GEPAttri->getOperand(0));
+        assert(AttrGV->hasInitializer() && "ObjC Property GV Don't Have Initializer");
+        StringRef attrString=dyn_cast<ConstantDataSequential>(AttrGV->getInitializer())->getAsCString();
+        errs()<<attrString<<"\n";
+        vector<Value*> addProp_args;
+        addProp_args.push_back(Class);
+        addProp_args.push_back(GEPName);
+        //TODO: Create GEPs to load attribute
+        //TODO: ADD ATTR COUNT
+        //IRB->CreateCall(class_addProperty,ArrayRef<Value*>(addProp_args));
+      }
+    }
   }
 };
 void addAntiClassDumpPass(legacy::PassManagerBase &PM) {
