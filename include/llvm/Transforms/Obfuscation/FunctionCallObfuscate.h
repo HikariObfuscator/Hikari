@@ -7,6 +7,6 @@ using namespace llvm;
 
 // Namespace
 namespace llvm {
-	void addFunctionCallObfuscatePass(legacy::PassManagerBase &PM);
+	Pass* createFunctionCallObfuscatePass();
 }
 #endif

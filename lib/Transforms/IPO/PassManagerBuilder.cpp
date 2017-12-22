@@ -158,6 +158,9 @@ static cl::opt<bool> EnableBasicBlockSplit("enable-splitobf",cl::init(false),cl:
 static cl::opt<bool> EnableSubstitution("enable-subobf",cl::init(false),cl::NotHidden,cl::desc("Enable Instruction Substitution."));
 static cl::opt<bool> EnableObfuscation("enable-allobf",cl::init(false),cl::NotHidden,cl::desc("Enable All Obfuscation.(Except LTO Passes)"));
 static cl::opt<bool> EnableAntiDebugging("enable-adb",cl::init(false),cl::NotHidden,cl::desc("Enable AntiDebugging."));
+static cl::opt<bool> EnableFunctionCallObfuscate(
+    "enable-fco", cl::init(false), cl::NotHidden,
+    cl::desc("Enable Function CallSite Obfuscation."));
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
     SizeLevel = 0;
@@ -426,6 +429,9 @@ void PassManagerBuilder::populateModulePassManager(
   }
   if(EnableAntiDebugging||EnableObfuscation){
     MPM.add(createAntiDebuggingPass());
+  }
+  if(EnableFunctionCallObfuscate||EnableObfuscation){
+    MPM.add(createFunctionCallObfuscatePass());
   }
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.
@@ -925,7 +931,6 @@ void PassManagerBuilder::populateThinLTOPassManager(
 void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
     addSymbolObfPass(PM);
     addAntiClassDumpPass(PM);
-    addFunctionCallObfuscatePass(PM);
   if (LibraryInfo)
     PM.add(new TargetLibraryInfoWrapperPass(*LibraryInfo));
 

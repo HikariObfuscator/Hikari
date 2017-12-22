@@ -8,6 +8,8 @@
  */
 
 #include "llvm/Transforms/Obfuscation/FunctionCallObfuscate.h"
+#include "json.hpp"
+#include "llvm/ADT/Triple.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -17,20 +19,40 @@
 #include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
 #include <cstdlib>
 #include <dlfcn.h>
+#include <fstream>
 #include <iostream>
+#include <regex>
 #include <string>
 using namespace llvm;
 using namespace std;
-static cl::opt<bool> EnableFunctionCallObfuscate(
-    "enable-fco", cl::init(false), cl::NotHidden,
-    cl::desc("Enable Function CallSite Obfuscation.Use with LTO"));
+using json = nlohmann::json;
+static cl::opt<string>
+    SymbolConfigPath("fcoconfig",
+                     cl::desc("FunctionCallObfuscate Configuration Path"),
+                     cl::value_desc("filename"), cl::init("+-x/"));
 namespace llvm {
 struct FunctionCallObfuscate : public FunctionPass {
   static char ID;
+  json Configuration;
   FunctionCallObfuscate() : FunctionPass(ID) {}
+  bool doInitialization(Module &M) override {
+    if (SymbolConfigPath == "+-x/") {
+      SmallString<32> Path;
+      if (sys::path::home_directory(Path)) { // Stolen from LineEditor.cpp
+        sys::path::append(Path, "Hikari", "SymbolConfig.json");
+        SymbolConfigPath = Path.str();
+      }
+    }
+    errs() << "Loading Symbol Configuration From:" << SymbolConfigPath << "\n";
+    ifstream infile(SymbolConfigPath);
+    infile >> this->Configuration;
+    return false;
+  }
   void HandleObjC(Module &M) {
     // Iterate all CLASSREF uses and replace with objc_getClass() call
     // Strings are encrypted in other passes
@@ -108,8 +130,8 @@ struct FunctionCallObfuscate : public FunctionPass {
         Instruction &Inst = *I;
         if (isa<CallInst>(&Inst) || isa<InvokeInst>(&Inst)) {
           CallSite CS(&Inst);
-          Function *calledFunction = NULL;
-          if (CS.isIndirectCall()) {
+          Function *calledFunction = CS.getCalledFunction();
+          if (calledFunction == NULL) {
             /*
               Note:
               For Indirect Calls:
@@ -119,21 +141,32 @@ struct FunctionCallObfuscate : public FunctionPass {
             */
             calledFunction =
                 dyn_cast<Function>(CS.getCalledValue()->stripPointerCasts());
-            if (!calledFunction) {
-              errs() << "Failed To Extract Function From Indirect Call\n";
-              CS.getCalledValue()->print(errs());
-              errs() << "\n";
-              continue;
-            }
-          } else {
-            calledFunction = CS.getCalledFunction();
+          }
+          // Simple Extracting Failed
+          // Use our own implementation
+          if (calledFunction == NULL) {
+            errs() << "Failed To Extract Function From Indirect Call\n";
+            CS.getCalledValue()->print(errs());
+            errs() << "\n";
+            continue;
           }
           // It's only safe to restrict our modification to external symbols
           // Otherwise stripped binary will crash
-          if (calledFunction != NULL && calledFunction->empty() &&
-              !calledFunction->getName().equals("dlsym") &&
-              !calledFunction->getName().equals("dlopen") &&
-              !calledFunction->isIntrinsic()) {
+          if (!calledFunction->empty() ||
+              calledFunction->getName().equals("dlsym") ||
+              calledFunction->getName().equals("dlopen") ||
+              calledFunction->isIntrinsic()) {
+            CS.getCalledValue()->print(errs());
+            errs() << " Not Applicable For FCO\n";
+            continue;
+          }
+          // errs()<<"Searching For:"<<calledFunction->getName()<<" In
+          // Configuration\n";
+          if (this->Configuration.find(calledFunction->getName().str()) !=
+              this->Configuration.end()) {
+            string sname = this->Configuration[calledFunction->getName().str()]
+                               .get<string>();
+            StringRef calledFunctionName = StringRef(sname);
             BasicBlock *EntryBlock = CS->getParent();
             IRBuilder<> IRB(EntryBlock, EntryBlock->getFirstInsertionPt());
             vector<Value *> dlopenargs;
@@ -142,29 +175,26 @@ struct FunctionCallObfuscate : public FunctionPass {
                 ConstantInt::get(Int32Ty, RTLD_NOW | RTLD_GLOBAL));
             Value *Handle =
                 IRB.CreateCall(dlopen_decl, ArrayRef<Value *>(dlopenargs));
-            errs() << "Created dlopen() Instruction:";
-            Handle->print(errs());
-            errs() << "\n";
-            StringRef calledFunctionName = calledFunction->getName();
-            if (calledFunctionName.startswith("\x01_")) {
-              calledFunctionName = calledFunctionName.substr(2);
-              //Hack. See issues #1
-              errs() << "Fixed SymbolName:" << calledFunction->getName()
-                     << " To:" << calledFunctionName << "\n";
-            }
+            // errs() << "Created dlopen() Instruction:";
+            // Handle->print(errs());
+            // errs() << "\n";
+            // Hack. See issues #1
+            // errs() << "Fixed SymbolName:" << calledFunction->getName()<< "
+            // To:" << calledFunctionName << "\n";
+
             // Create dlsym call
             vector<Value *> args;
             args.push_back(Handle);
             args.push_back(IRB.CreateGlobalStringPtr(calledFunctionName));
             Value *fp = IRB.CreateCall(dlsym_decl, ArrayRef<Value *>(args));
             Value *bitCastedFunction =
-                IRB.CreateBitCast(fp, calledFunction->getType());
+                IRB.CreateBitCast(fp, CS.getCalledValue()->getType());
             CS.setCalledFunction(bitCastedFunction);
-            errs() << "Created dlsym() Instruction:";
-            fp->print(errs());
-            errs() << " For Function:";
-            calledFunction->print(errs());
-            errs() << "\n";
+            // errs() << "Created dlsym() Instruction:";
+            // fp->print(errs());
+            //  errs() << " For Function:";
+            // calledFunction->print(errs());
+            // errs() << "\n";
           }
         }
       }
@@ -172,10 +202,6 @@ struct FunctionCallObfuscate : public FunctionPass {
     return true;
   }
 };
-void addFunctionCallObfuscatePass(legacy::PassManagerBase &PM) {
-  if (EnableFunctionCallObfuscate) {
-    PM.add(new FunctionCallObfuscate());
-  }
-}
+Pass *createFunctionCallObfuscatePass() { return new FunctionCallObfuscate(); }
 } // namespace llvm
 char FunctionCallObfuscate::ID = 0;

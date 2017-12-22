@@ -194,13 +194,7 @@ struct AntiClassDump : public ModulePass {
         tmpclses.push_back(clsName);
       }
     }
-    /*
-      We now need to resolve dependencies.
-      The idea is pretty straightforward. We keep dequeing.
-      For each class dequed.We check if superclass is available,if so, we push
-      it into readyclses Otherwise we push the class back to the end of the
-      queue. Since we are at LTO stage, this won't cause an infinite loop
-    */
+    //Sort Initialize Sequence Based On Dependency
     while (tmpclses.size() > 0) {
       string clstmp = tmpclses.front();
       tmpclses.pop_front();
@@ -278,9 +272,15 @@ struct AntiClassDump : public ModulePass {
     ConstantStruct *class_ro=dyn_cast<ConstantStruct>(CS->getOperand(4));
     //Now Scan For Props and Ivars in OBJC_CLASS_RO AND OBJC_METACLASS_RO
     //Note that class_ro_t's structure is different for 32 and 64bit runtime
+    HandlePropertyIvar(metaclass_ro,IRB,false);
+    HandlePropertyIvar(class_ro,IRB,true);
+    IRB->CreateCall(objc_registerClassPair,{Class});
+    //FIXME:Fix ro flags
+    //Now Metadata is available in Runtime.
+    //TODO:Add Methods
 
   }
-  void HandleClassRO(ConstantStruct * class_ro,IRBuilder<>* IRB,bool isClassRO){
+  void HandlePropertyIvar(ConstantStruct * class_ro,IRBuilder<>* IRB,bool isClassRO){
 
   }
 };

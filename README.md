@@ -7,11 +7,12 @@ For macOS,Download from Releases page,Extract Hikari.xctoolchain to ``~/Library/
 For other platforms, compile and install accordingly. See [BuildScript](https://gist.github.com/Naville/f1d8ea43ffde61f57497492d599b32fb)
 Note that this repo currently contains only the LLVM Core, see [Getting Started with the LLVM System](http://llvm.org/docs/GettingStarted.html) for installing other components like Clang
 
+Note that C++11 is required
+
 ## Usage
 Add one of the following to CFLAGS
 
 ```  
-enable-fco  Enable Function CallSite Obfuscation.Use with LTO  
 enable-symobf Enable Symbol Obfuscation.Use with LTO  
 enable-bcfobf Enable BogusControlFlow  
 enable-cffobf Enable Flattening  
@@ -30,6 +31,12 @@ For Xcode, add something like ``-Wl,-mllvm,-enable-fco`` to ``Other linker flags
 - Improved CFG Obfuscation Algorithm
 - Complete Anti-Debuging
 
+## Pass Options
+### FunctionCallObfuscate
+  Pass ``-enable-fco`` to enable.FCO uses a json configuration to resolve symbols.For example ``{"AAAA":"BBBB"}`` means the pass should replace a call to function ``AAAA`` with a call to the result of ``dlsym(RTLD_DEFAULT,"BBBB")``
+  
+  By default configuration is loaded from ``~/Hikari/SymbolConfig.json``
+  Pass ``fcoconfig=PATH`` to override
 ## Intergrating with Xcode
 - Compile From Scratch or Download XcodeToolchain From Releases
 - Download ``Hikari.xcplugin`` from [HikariProject/Resources](https://github.com/HikariProject/Resources)
