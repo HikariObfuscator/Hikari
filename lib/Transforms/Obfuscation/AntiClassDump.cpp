@@ -236,16 +236,12 @@ struct AntiClassDump : public ModulePass {
     // We now prepare ObjC API Definitions
 
     Module *M = IRB->GetInsertBlock()->getModule();
-    StructType *objc_property_attribute_t_type = reinterpret_cast<StructType *>(
-        M->getTypeByName("struct.objc_property_attribute_t"));
     Function *objc_getClass = M->getFunction("objc_getClass");
     Function *objc_allocateClassPair = M->getFunction("objc_allocateClassPair");
     Function *objc_registerClassPair = M->getFunction("objc_registerClassPair");
-    Function *class_addProperty = M->getFunction("class_addProperty");
     Function *objc_getMetaClass = M->getFunction("objc_getMetaClass");
     Function *sel_registerName = M->getFunction("sel_registerName");
     Function *class_replaceMethod = M->getFunction("class_replaceMethod");
-    Function *class_addIvar = M->getFunction("class_addIvar");
     Type *Int8PtrTy = Type::getInt8PtrTy(M->getContext());
     FunctionType *IMPType =
         FunctionType::get(Int8PtrTy, {Int8PtrTy, Int8PtrTy}, true);
@@ -270,27 +266,29 @@ struct AntiClassDump : public ModulePass {
     //   IMP *vtable;
     //   struct class_ro_t *ro;
     // }
-    ConstantStruct *metaclass_ro = dyn_cast<ConstantStruct>(CS->getOperand(0));
-    ConstantStruct *class_ro = dyn_cast<ConstantStruct>(CS->getOperand(4));
+    GlobalVariable *metaclass_ro = dyn_cast<GlobalVariable>(CS->getOperand(0));
+    GlobalVariable *class_ro = dyn_cast<GlobalVariable>(CS->getOperand(4));
     // Now Scan For Props and Ivars in OBJC_CLASS_RO AND OBJC_METACLASS_RO
     // Note that class_ro_t's structure is different for 32 and 64bit runtime
-    HandlePropertyIvar(metaclass_ro, IRB, false,M);
-    HandlePropertyIvar(class_ro, IRB, true,M);
+    if (ConstantStruct *CS =
+            dyn_cast<ConstantStruct>(class_ro->getInitializer())) {
+      HandlePropertyIvar(CS, IRB, M);
+    }
     IRB->CreateCall(objc_registerClassPair, {Class});
     // FIXME:Fix ro flags
     // Now Metadata is available in Runtime.
     // TODO:Add Methods
   }
   void HandlePropertyIvar(ConstantStruct *class_ro, IRBuilder<> *IRB,
-                          bool isClassRO,Module* M) {
-    StructType* method_list_t_type=M->getTypeByName("struct.__method_list_t");
-    StructType* protocol_list_t_type=M->getTypeByName("struct._objc_protocol_list");
-    StructType* ivar_list_t_type=M->getTypeByName("struct._ivar_list_t");
-    StructType* property_list_t_type=M->getTypeByName("struct._prop_list_t");
-    ConstantStruct* method_list=NULL;
-    ConstantStruct* protocol_list=NULL;
-    ConstantStruct* ivar_list=NULL;
-    ConstantStruct* property_list=NULL;
+                          Module *M) {
+    StructType *objc_property_attribute_t_type = reinterpret_cast<StructType *>(
+        M->getTypeByName("struct.objc_property_attribute_t"));
+    Function *class_addProperty = M->getFunction("class_addProperty");
+    Function *class_addIvar = M->getFunction("class_addIvar");
+    StructType *ivar_list_t_type = M->getTypeByName("struct._ivar_list_t");
+    StructType *property_list_t_type = M->getTypeByName("struct._prop_list_t");
+    ConstantExpr *ivar_list = NULL;
+    ConstantExpr *property_list = NULL;
     /*
       struct class_ro_t {
         uint32_t flags;
@@ -310,15 +308,24 @@ struct AntiClassDump : public ModulePass {
           return baseMethodList;
         }
       };*/
-    for(unsigned i=0;i<class_ro->getNumOperands();i++){
-      Value* tmp=class_ro->getOperand(i);
-      if(tmp->getType()==method_list_t_type){
-        method_list=dyn_cast<ConstantStruct>(tmp);
+
+    // This is outrageous mess. Can we do better?
+    for (unsigned i = 0; i < class_ro->getType()->getNumElements(); i++) {
+      Constant *tmp = dyn_cast<Constant>(class_ro->getAggregateElement(i));
+      if(tmp->isNullValue ()){
+        continue;
       }
-      else if(tmp->getType()==protocol_list_t_type){
-        protocol_list=dyn_cast<ConstantStruct>(tmp);
+      Type* type=tmp->getType();
+      if(type==ivar_list_t_type->getPointerTo()){
+        ivar_list=dyn_cast<ConstantExpr>(tmp);
+      }
+      else if(type==property_list_t_type->getPointerTo()){
+        property_list=dyn_cast<ConstantExpr>(tmp);
       }
     }
+    // End Struct Loading
+    //The ConstantExprs are actually BitCasts
+    //We need to extract correct operands,which point to corresponding GlobalVariable
 
   }
 };
