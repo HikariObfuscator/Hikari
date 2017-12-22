@@ -194,7 +194,7 @@ struct AntiClassDump : public ModulePass {
         tmpclses.push_back(clsName);
       }
     }
-    //Sort Initialize Sequence Based On Dependency
+    // Sort Initialize Sequence Based On Dependency
     while (tmpclses.size() > 0) {
       string clstmp = tmpclses.front();
       tmpclses.pop_front();
@@ -255,12 +255,14 @@ struct AntiClassDump : public ModulePass {
     Value *SuperClassNameGV = IRB->CreateGlobalStringPtr(SuperClassName);
     Value *ClassNameGV = IRB->CreateGlobalStringPtr(ClassName);
     CallInst *BaseClass = IRB->CreateCall(objc_getClass, {ClassNameGV});
-    vector<Value*> allocateClsArgs;
+    vector<Value *> allocateClsArgs;
     allocateClsArgs.push_back(BaseClass);
     allocateClsArgs.push_back(ClassNameGV);
-    allocateClsArgs.push_back(ConstantInt::get(objc_allocateClassPair->getFunctionType()->getParamType(2), 0));
-    CallInst *Class = IRB->CreateCall(objc_allocateClassPair,ArrayRef<Value*>(allocateClsArgs));
-    //Let's extract stuffs
+    allocateClsArgs.push_back(ConstantInt::get(
+        objc_allocateClassPair->getFunctionType()->getParamType(2), 0));
+    CallInst *Class = IRB->CreateCall(objc_allocateClassPair,
+                                      ArrayRef<Value *>(allocateClsArgs));
+    // Let's extract stuffs
     // struct _class_t {
     //   struct _class_t *isa;
     //   struct _class_t * const superclass;
@@ -268,19 +270,55 @@ struct AntiClassDump : public ModulePass {
     //   IMP *vtable;
     //   struct class_ro_t *ro;
     // }
-    ConstantStruct *metaclass_ro=dyn_cast<ConstantStruct>(CS->getOperand(0));
-    ConstantStruct *class_ro=dyn_cast<ConstantStruct>(CS->getOperand(4));
-    //Now Scan For Props and Ivars in OBJC_CLASS_RO AND OBJC_METACLASS_RO
-    //Note that class_ro_t's structure is different for 32 and 64bit runtime
-    HandlePropertyIvar(metaclass_ro,IRB,false);
-    HandlePropertyIvar(class_ro,IRB,true);
-    IRB->CreateCall(objc_registerClassPair,{Class});
-    //FIXME:Fix ro flags
-    //Now Metadata is available in Runtime.
-    //TODO:Add Methods
-
+    ConstantStruct *metaclass_ro = dyn_cast<ConstantStruct>(CS->getOperand(0));
+    ConstantStruct *class_ro = dyn_cast<ConstantStruct>(CS->getOperand(4));
+    // Now Scan For Props and Ivars in OBJC_CLASS_RO AND OBJC_METACLASS_RO
+    // Note that class_ro_t's structure is different for 32 and 64bit runtime
+    HandlePropertyIvar(metaclass_ro, IRB, false,M);
+    HandlePropertyIvar(class_ro, IRB, true,M);
+    IRB->CreateCall(objc_registerClassPair, {Class});
+    // FIXME:Fix ro flags
+    // Now Metadata is available in Runtime.
+    // TODO:Add Methods
   }
-  void HandlePropertyIvar(ConstantStruct * class_ro,IRBuilder<>* IRB,bool isClassRO){
+  void HandlePropertyIvar(ConstantStruct *class_ro, IRBuilder<> *IRB,
+                          bool isClassRO,Module* M) {
+    StructType* method_list_t_type=M->getTypeByName("struct.__method_list_t");
+    StructType* protocol_list_t_type=M->getTypeByName("struct._objc_protocol_list");
+    StructType* ivar_list_t_type=M->getTypeByName("struct._ivar_list_t");
+    StructType* property_list_t_type=M->getTypeByName("struct._prop_list_t");
+    ConstantStruct* method_list=NULL;
+    ConstantStruct* protocol_list=NULL;
+    ConstantStruct* ivar_list=NULL;
+    ConstantStruct* property_list=NULL;
+    /*
+      struct class_ro_t {
+        uint32_t flags;
+        uint32_t instanceStart;
+        uint32_t instanceSize;
+      #ifdef __LP64__
+        uint32_t reserved;
+      #endif
+        const uint8_t * ivarLayout;
+        const char * name;
+        method_list_t * baseMethodList;
+        protocol_list_t * baseProtocols;
+        const ivar_list_t * ivars;
+        const uint8_t * weakIvarLayout;
+        property_list_t *baseProperties;
+        method_list_t *baseMethods() const {
+          return baseMethodList;
+        }
+      };*/
+    for(unsigned i=0;i<class_ro->getNumOperands();i++){
+      Value* tmp=class_ro->getOperand(i);
+      if(tmp->getType()==method_list_t_type){
+        method_list=dyn_cast<ConstantStruct>(tmp);
+      }
+      else if(tmp->getType()==protocol_list_t_type){
+        protocol_list=dyn_cast<ConstantStruct>(tmp);
+      }
+    }
 
   }
 };

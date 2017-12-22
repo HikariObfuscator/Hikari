@@ -21,6 +21,7 @@
 #include <iostream>
 #include <cstdlib>
 #include "llvm/IR/InlineAsm.h"
+#include "llvm/ADT/Triple.h"
 using namespace llvm;
 using namespace std;
 namespace llvm{
@@ -32,16 +33,18 @@ namespace llvm{
       IRBuilder<> IRB(EntryBlock, EntryBlock->getFirstInsertionPt());
       FunctionType *ADBFTy =FunctionType::get(Type::getVoidTy(F.getParent()->getContext()),ArrayRef<Type*>(), false);
       InlineAsm *IA =NULL;
-      if(F.getParent()->getTargetTriple().compare(0,strlen("arm64-apple-ios"),"arm64-apple-ios") == 0){
+      Triple tri(F.getParent()->getTargetTriple());
+      Triple::OSType ost=tri.getOS();
+      if(ost==Triple::OSType::IOS){
         errs()<<"Injecting Inline Assembly AntiDebugging For:"<<F.getParent()->getTargetTriple()<<"\n";
-        StringRef InlineASMString=IOS64ANTIDBG;
-        IA=InlineAsm::get(ADBFTy,InlineASMString,"",true, false, InlineAsm::AD_Intel);
-        IRB.CreateCall(IA, ArrayRef<Value*>());
-      }
-      else if(F.getParent()->getTargetTriple().find("-apple-ios") !=string::npos){
-        //Not ARM64.Yet still apple-ios. We are ARMV7/ARMV7S
-        errs()<<"Injecting Inline Assembly AntiDebugging For:"<<F.getParent()->getTargetTriple()<<"\n";
-        StringRef InlineASMString=IOS32ANTIDBG;
+        StringRef InlineASMString;
+        if(tri.isArch64Bit()){
+          //We are 64bit iOS. i.e. AArch64
+          InlineASMString=IOS64ANTIDBG;
+        }
+        else{
+          InlineASMString=IOS32ANTIDBG;
+        }
         IA=InlineAsm::get(ADBFTy,InlineASMString,"",true, false, InlineAsm::AD_Intel);
         IRB.CreateCall(IA, ArrayRef<Value*>());
       }
