@@ -46,6 +46,7 @@ struct AntiClassDump : public ModulePass {
     Type *Int64Ty = Type::getInt64Ty(M.getContext());
     Type *Int32Ty = Type::getInt32Ty(M.getContext());
     Type *Int8PtrTy = Type::getInt8PtrTy(M.getContext());
+    Type *Int8Ty = Type::getInt8Ty(M.getContext());
     // Generic ObjC Runtime Declarations
     FunctionType *IMPType =
         FunctionType::get(Int8PtrTy, {Int8PtrTy, Int8PtrTy}, true);
@@ -80,53 +81,41 @@ struct AntiClassDump : public ModulePass {
       M.getOrInsertGlobal("struct.objc_property_attribute_t",
                           objc_property_attribute_t_type);
     }
-    AttributeSet SExtAttr = AttributeSet();
-    SExtAttr = SExtAttr.addAttribute(M.getContext(), Attribute::SExt);
-    AttributeSet ZExtAttr = AttributeSet();
-    ZExtAttr = ZExtAttr.addAttribute(M.getContext(), Attribute::ZExt);
-    vector<AttributeSet> c_aIArgAttributes;
-    c_aIArgAttributes.push_back(AttributeSet());
-    c_aIArgAttributes.push_back(AttributeSet());
-    c_aIArgAttributes.push_back(AttributeSet());
-    c_aIArgAttributes.push_back(ZExtAttr);
-    c_aIArgAttributes.push_back(AttributeSet());
-    AttributeList class_addIvar_attr =
-        AttributeList::get(M.getContext(), AttributeSet(), SExtAttr,
-                           ArrayRef<AttributeSet>(c_aIArgAttributes));
-    AttributeList class_addProperty_attr = AttributeList::get(
-        M.getContext(), AttributeSet(), SExtAttr, ArrayRef<AttributeSet>());
     vector<Type *> allocaClsTypeVector;
+    vector<Type *> addIvarTypeVector;
+    vector<Type *> addPropTypeVector;
     allocaClsTypeVector.push_back(Int8PtrTy);
     allocaClsTypeVector.push_back(Int8PtrTy);
+    addIvarTypeVector.push_back(Int8PtrTy);
+    addIvarTypeVector.push_back(Int8PtrTy);
+    addPropTypeVector.push_back(Int8PtrTy);
+    addPropTypeVector.push_back(Int8PtrTy);
+    addPropTypeVector.push_back(objc_property_attribute_t_type->getPointerTo());
     if (tri.isArch64Bit ()) {
       // We are 64Bit Device
       allocaClsTypeVector.push_back(Int64Ty);
-      M.getOrInsertFunction("class_addIvar", class_addIvar_attr,
-                            Type::getInt8Ty(M.getContext()), Int8PtrTy,
-                            Int8PtrTy, Int64Ty, Type::getInt8Ty(M.getContext()),
-                            Int8PtrTy);
-      M.getOrInsertFunction("class_addProperty", class_addProperty_attr,
-                            Type::getInt8Ty(M.getContext()), Int8PtrTy,
-                            Int8PtrTy,
-                            objc_property_attribute_t_type->getPointerTo(),
-                            Int64Ty); // objc_property_attribute_t_type is NULL?
+      addIvarTypeVector.push_back(Int64Ty);
+      addPropTypeVector.push_back(Int64Ty);
     } else{
       // Not 64Bit.However we are still on apple platform.So We are
       // ARMV7/ARMV7S/i386
       // PowerPC is ignored, feel free to open a PR if you want to
       allocaClsTypeVector.push_back(Int32Ty);
-      M.getOrInsertFunction("class_addIvar", class_addIvar_attr,
-                            Type::getInt8Ty(M.getContext()), Int8PtrTy,
-                            Int8PtrTy, Int32Ty, Type::getInt8Ty(M.getContext()),
-                            Int8PtrTy);
-      M.getOrInsertFunction(
-          "class_addProperty", class_addProperty_attr,
-          Type::getInt8Ty(M.getContext()), Int8PtrTy, Int8PtrTy,
-          objc_property_attribute_t_type->getPointerTo(), Int32Ty);
+      addIvarTypeVector.push_back(Int32Ty);
+      addPropTypeVector.push_back(Int32Ty);
     }
+    addIvarTypeVector.push_back(Int8Ty);
+    addIvarTypeVector.push_back(Int8PtrTy);
+    //Types Collected. Now Inject Functions
     FunctionType *allocaClsType = FunctionType::get(
         Int8PtrTy, ArrayRef<Type *>(allocaClsTypeVector), false);
     M.getOrInsertFunction("objc_allocateClassPair", allocaClsType);
+    FunctionType *addIvarType = FunctionType::get(
+        Int8Ty, ArrayRef<Type *>(addIvarTypeVector), false);
+    M.getOrInsertFunction("class_addIvar",addIvarType);
+    FunctionType *addPropType = FunctionType::get(
+        Int8Ty, ArrayRef<Type *>(addPropTypeVector), false);
+    M.getOrInsertFunction("class_addProperty",addPropType);
     return true;
   }
   bool runOnModule(Module &M) override {
@@ -279,6 +268,7 @@ struct AntiClassDump : public ModulePass {
     Function *class_addIvar = M->getFunction("class_addIvar");
     StructType *ivar_list_t_type = M->getTypeByName("struct._ivar_list_t");
     StructType *property_list_t_type = M->getTypeByName("struct._prop_list_t");
+    StructType *property_t_type = M->getTypeByName("struct._prop_t");
     ConstantExpr *ivar_list = NULL;
     ConstantExpr *property_list = NULL;
     /*
@@ -358,13 +348,42 @@ struct AntiClassDump : public ModulePass {
         GlobalVariable *AttrGV=dyn_cast<GlobalVariable>(GEPAttri->getOperand(0));
         assert(AttrGV->hasInitializer() && "ObjC Property GV Don't Have Initializer");
         StringRef attrString=dyn_cast<ConstantDataSequential>(AttrGV->getInitializer())->getAsCString();
-        errs()<<attrString<<"\n";
+        SmallVector<StringRef,8> attrComponents;
+        attrString.split(attrComponents,',');
+        map<string,string> propMap;//First character is key, remaining parts are value.This is used to generate pairs of attributes
+        vector<Constant*> attrs;//Save Each Single Attr for later use
+        vector<Value*> zeroes;//Indexes used for creating GEP
+        zeroes.push_back(ConstantInt::get(Type::getInt32Ty(M->getContext()), 0));
+        zeroes.push_back(ConstantInt::get(Type::getInt32Ty(M->getContext()), 0));
+        for(StringRef s:attrComponents){
+          StringRef key=s.substr(0,1);
+          StringRef value=s.substr(1);
+          propMap[key]=value;
+          vector<Constant*> tmp;
+          Constant* KeyConst=dyn_cast<Constant>(IRB->CreateGlobalStringPtr(key));
+          Constant* ValueConst=dyn_cast<Constant>(IRB->CreateGlobalStringPtr(value));
+          tmp.push_back(KeyConst);
+          tmp.push_back(ValueConst);
+          Constant* attr=ConstantStruct::get(property_t_type,ArrayRef<Constant*>(tmp));
+          attrs.push_back(attr);
+        }
+        ArrayType* ATType=ArrayType::get(property_t_type,attrs.size());
+        Constant* CA=ConstantArray::get(ATType,ArrayRef<Constant*>(attrs));
+        AllocaInst* attrInMem=IRB->CreateAlloca(ATType);
+        IRB->CreateStore(CA,attrInMem);
+        //attrInMem has type [n x %struct.objc_property_attribute_t]*
+        //We need to bitcast it to %struct.objc_property_attribute_t* to silent GEP's type check
+        Value* BitCastedFromArrayToPtr=IRB->CreateBitCast(attrInMem,objc_property_attribute_t_type->getPointerTo());
+        Value* GEP=IRB->CreateInBoundsGEP(BitCastedFromArrayToPtr,zeroes);
+        //Now GEP is done.
+        //BitCast it back to our required type
+        Value* GEPBitCasedToArg=IRB->CreateBitCast(GEP,class_addProperty->getFunctionType()->getParamType(2));
         vector<Value*> addProp_args;
         addProp_args.push_back(Class);
         addProp_args.push_back(GEPName);
-        //TODO: Create GEPs to load attribute
-        //TODO: ADD ATTR COUNT
-        //IRB->CreateCall(class_addProperty,ArrayRef<Value*>(addProp_args));
+        addProp_args.push_back(GEPBitCasedToArg);
+        addProp_args.push_back(ConstantInt::get(class_addProperty->getFunctionType()->getParamType(3),attrs.size()));
+        IRB->CreateCall(class_addProperty,ArrayRef<Value*>(addProp_args));
       }
     }
   }
