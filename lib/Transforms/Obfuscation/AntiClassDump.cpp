@@ -30,6 +30,24 @@ using namespace std;
 static cl::opt<bool>
     EnableAntiClassDump("enable-acd", cl::init(false), cl::NotHidden,
                         cl::desc("Enable Anti class-dump.Use with LTO"));
+static cl::opt<int> AntiClassDumpMode("acd-flag",cl::init(1), cl::NotHidden,
+                    cl::desc("AntiClassDump Mode. See READMEs"));
+/*
+See https://hikariproject.github.io/2017/12/21/AntiClassDumpImplementationNotes/
+We need three modes for different link types
+1 for Injecting at global initializers. This usually requires building as framework/executable/dynamic library
+2 for replace method structure with only +initialize and inject there
+3 for annotation-based initializing where the user creates a custom function for initializing
+*/
+template<typename T>//Stolen from https://stackoverflow.com/questions/28471329/llvm-pass-replacealluseswith-type-not-match
+void ReplaceUnsafe(T *from, T *to) {
+
+  while (!from->use_empty()) {
+    auto &U = *from->use_begin();
+    U.set(to);
+  }
+  //from->eraseFromParent();
+}
 namespace llvm {
 struct AntiClassDump : public ModulePass {
   static char ID;
@@ -208,6 +226,17 @@ struct AntiClassDump : public ModulePass {
     }
     // TODO:Wipe out old Structures.This involves replacing Class Structures
     //referenced by objc_msgSend calls with objc_getClass call.
+    //Let's iterate class structs and replace them with objc_getClass calls
+    
+    ArrayType *newOLCType=ArrayType::get(Type::getInt8PtrTy(M.getContext()),0);
+    Constant *newOLCGVInit=ConstantArray::get(newOLCType,{});
+
+    OLCGV->removeFromParent();
+    GlobalVariable* newOLCGV=new GlobalVariable(M,newOLCType,true,GlobalValue::LinkageTypes::PrivateLinkage,newOLCGVInit,"OBJC_LABEL_CLASS_$");
+    newOLCGV->copyAttributesFrom(OLCGV);
+    //ReplaceUnsafe(OLCGV,newOLCGV);
+    //OLCGV->eraseFromParent();
+
     // TODO:Add our initializer to llvm.global_ctors
     // Append Terminator
     IRB.CreateRetVoid();
@@ -231,16 +260,12 @@ struct AntiClassDump : public ModulePass {
     Function *objc_getClass = M->getFunction("objc_getClass");
     Function *objc_allocateClassPair = M->getFunction("objc_allocateClassPair");
     Function *objc_registerClassPair = M->getFunction("objc_registerClassPair");
-    Function *objc_getMetaClass = M->getFunction("objc_getMetaClass");
-    Type *Int8PtrTy = Type::getInt8PtrTy(M->getContext());
-    FunctionType *IMPType =
-        FunctionType::get(Int8PtrTy, {Int8PtrTy, Int8PtrTy}, true);
-    PointerType *IMPPointerType = PointerType::get(IMPType, 0);
+    //Type *Int8PtrTy = Type::getInt8PtrTy(M->getContext());
     // End of ObjC API Definitions
     // Start Allocating the class first
     Value *SuperClassNameGV = IRB->CreateGlobalStringPtr(SuperClassName);
     Value *ClassNameGV = IRB->CreateGlobalStringPtr(ClassName);
-    CallInst *BaseClass = IRB->CreateCall(objc_getClass, {ClassNameGV});
+    CallInst *BaseClass = IRB->CreateCall(objc_getClass, {SuperClassNameGV});
     vector<Value *> allocateClsArgs;
     allocateClsArgs.push_back(BaseClass);
     allocateClsArgs.push_back(ClassNameGV);
@@ -307,6 +332,8 @@ struct AntiClassDump : public ModulePass {
           //Let's extract these info now
           //We should first register the selector
           CallInst* SEL=IRB->CreateCall(sel_registerName,{methodStruct->getOperand(0)});
+          Type* IMPType=class_replaceMethod->getFunctionType()->getParamType(2);
+          Value* BitCastedIMP=IRB->CreateBitCast(methodStruct->getOperand(2),IMPType);
           vector<Value*> replaceMethodArgs;
           if(isMetaClass){
             CallInst* className=IRB->CreateCall(class_getName,{Class});
@@ -318,12 +345,8 @@ struct AntiClassDump : public ModulePass {
           }
           replaceMethodArgs.push_back(SEL);//SEL
           //FIXME: IMP need bitcasting
-          replaceMethodArgs.push_back(methodStruct->getOperand(2));//imp
+          replaceMethodArgs.push_back(BitCastedIMP);//imp
           replaceMethodArgs.push_back(methodStruct->getOperand(1));//type
-          for(Value* val:replaceMethodArgs){
-            val->getType()->dump();
-          }
-          class_replaceMethod->getFunctionType()->dump();
           IRB->CreateCall(class_replaceMethod,ArrayRef<Value*>(replaceMethodArgs));
 
         }
