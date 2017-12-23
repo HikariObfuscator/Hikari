@@ -430,6 +430,7 @@ void PassManagerBuilder::populateModulePassManager(
   if(EnableAntiDebugging||EnableObfuscation){
     MPM.add(createAntiDebuggingPass());
   }
+  addAntiClassDumpPass(MPM,ACDMode::THIN);
   if(EnableFunctionCallObfuscate||EnableObfuscation){
     MPM.add(createFunctionCallObfuscatePass());
   }
@@ -930,7 +931,7 @@ void PassManagerBuilder::populateThinLTOPassManager(
 
 void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
     addSymbolObfPass(PM);
-    addAntiClassDumpPass(PM);
+    addAntiClassDumpPass(PM,ACDMode::FULL);
   if (LibraryInfo)
     PM.add(new TargetLibraryInfoWrapperPass(*LibraryInfo));
 

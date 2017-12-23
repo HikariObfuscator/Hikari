@@ -6,19 +6,27 @@
  *  are not considered
  *  See HikariProject's blog for details
  */
+/*
+  For maximum usability. We provide two modes for this pass, as defined in
+  llvm/Transforms/Obfuscation/AntiClassDump.h THIN mode is used on per-module
+  basis without LTO overhead and structs are left in the module where possible.
+  This is particularly useful for cases where LTO is not possible. For example
+  static library Full mode is used at LTO stage, this mode constructs dependency
+  graph and perform full wipe-out as well as llvm.global_ctors injection
+*/
+
+#include "llvm/Transforms/Obfuscation/AntiClassDump.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>
@@ -30,28 +38,21 @@ using namespace std;
 static cl::opt<bool>
     EnableAntiClassDump("enable-acd", cl::init(false), cl::NotHidden,
                         cl::desc("Enable Anti class-dump.Use with LTO"));
-static cl::opt<int> AntiClassDumpMode("acd-flag",cl::init(1), cl::NotHidden,
-                    cl::desc("AntiClassDump Mode. See READMEs"));
-/*
-See https://hikariproject.github.io/2017/12/21/AntiClassDumpImplementationNotes/
-We need three modes for different link types
-1 for Injecting at global initializers. This usually requires building as framework/executable/dynamic library
-2 for replace method structure with only +initialize and inject there
-3 for annotation-based initializing where the user creates a custom function for initializing
-*/
-template<typename T>//Stolen from https://stackoverflow.com/questions/28471329/llvm-pass-replacealluseswith-type-not-match
+template <typename T> // Stolen from
+                      // https://stackoverflow.com/questions/28471329/llvm-pass-replacealluseswith-type-not-match
 void ReplaceUnsafe(T *from, T *to) {
 
   while (!from->use_empty()) {
     auto &U = *from->use_begin();
     U.set(to);
   }
-  //from->eraseFromParent();
+  // from->eraseFromParent();
 }
 namespace llvm {
 struct AntiClassDump : public ModulePass {
   static char ID;
-  AntiClassDump() : ModulePass(ID) {}
+  ACDMode flag;
+  AntiClassDump(ACDMode flag) : ModulePass(ID) { this->flag = flag; }
   virtual bool doInitialization(Module &M) override {
     // Basic Defs
     Triple tri(M.getTargetTriple());
@@ -136,11 +137,11 @@ struct AntiClassDump : public ModulePass {
         FunctionType::get(Int8Ty, ArrayRef<Type *>(addPropTypeVector), false);
     M.getOrInsertFunction("class_addProperty", addPropType);
     FunctionType *class_getName_Type =
-        FunctionType::get(Int8Ty,{Int8Ty}, false);
-    M.getOrInsertFunction("class_getName",class_getName_Type);
+        FunctionType::get(Int8PtrTy, {Int8PtrTy}, false);
+    M.getOrInsertFunction("class_getName", class_getName_Type);
     FunctionType *objc_getMetaClass_Type =
-        FunctionType::get(Int8Ty,{Int8Ty}, false);
-    M.getOrInsertFunction("objc_getMetaClass",objc_getMetaClass_Type);
+        FunctionType::get(Int8PtrTy, {Int8PtrTy}, false);
+    M.getOrInsertFunction("objc_getMetaClass", objc_getMetaClass_Type);
     return true;
   }
   bool runOnModule(Module &M) override {
@@ -151,8 +152,9 @@ struct AntiClassDump : public ModulePass {
     Function *Initializer = Function::Create(
         InitializerType, GlobalValue::LinkageTypes::PrivateLinkage, "", &M);
     BasicBlock *EntryBB = BasicBlock::Create(M.getContext(), "", Initializer);
-    IRBuilder<> IRB(EntryBB);
     //
+    IRBuilder <> IRB(EntryBB);
+    IRB.CreateRetVoid();
     assert(OLCGV != NULL && "OBJC_LABEL_CLASS_$ Missing.");
     assert(OLCGV->hasInitializer() &&
            "OBJC_LABEL_CLASS_$ Doesn't Have Initializer.");
@@ -222,27 +224,66 @@ struct AntiClassDump : public ModulePass {
 
     // Now run handleClass for each class
     for (string className : readyclses) {
-      handleClass(GVMapping[className], &IRB);
+      handleClass(GVMapping[className], EntryBB);
     }
     // TODO:Wipe out old Structures.This involves replacing Class Structures
-    //referenced by objc_msgSend calls with objc_getClass call.
-    //Let's iterate class structs and replace them with objc_getClass calls
-    
-    ArrayType *newOLCType=ArrayType::get(Type::getInt8PtrTy(M.getContext()),0);
-    Constant *newOLCGVInit=ConstantArray::get(newOLCType,{});
+    // referenced by objc_msgSend calls with objc_getClass call.
+    // Let's iterate class structs and replace them with objc_getClass calls
+
+    ArrayType *newOLCType =
+        ArrayType::get(Type::getInt8PtrTy(M.getContext()), 0);
+    Constant *newOLCGVInit = ConstantArray::get(newOLCType, {});
 
     OLCGV->removeFromParent();
-    GlobalVariable* newOLCGV=new GlobalVariable(M,newOLCType,true,GlobalValue::LinkageTypes::PrivateLinkage,newOLCGVInit,"OBJC_LABEL_CLASS_$");
+    GlobalVariable *newOLCGV = new GlobalVariable(
+        M, newOLCType, true, GlobalValue::LinkageTypes::PrivateLinkage,
+        newOLCGVInit, "OBJC_LABEL_CLASS_$");
     newOLCGV->copyAttributesFrom(OLCGV);
-    //ReplaceUnsafe(OLCGV,newOLCGV);
-    //OLCGV->eraseFromParent();
+    // ReplaceUnsafe(OLCGV,newOLCGV);
+    // OLCGV->eraseFromParent();
 
     // TODO:Add our initializer to llvm.global_ctors
-    // Append Terminator
-    IRB.CreateRetVoid();
+    // Append Terminator for global ctor
     return true;
   } // runOnModule
-  void handleClass(GlobalVariable *GV, IRBuilder<> *IRB) {
+  map<string, Value *>
+  splitclass_ro_t(ConstantStruct *class_ro,
+                  Module *M) { // Split a class_ro_t structure
+    map<string, Value *> info;
+    StructType *objc_method_list_t_type =
+        M->getTypeByName("struct.__method_list_t");
+    StructType *ivar_list_t_type = M->getTypeByName("struct._ivar_list_t");
+    StructType *property_list_t_type = M->getTypeByName("struct._prop_list_t");
+    for (unsigned i = 0; i < class_ro->getType()->getNumElements(); i++) {
+      Constant *tmp = dyn_cast<Constant>(class_ro->getAggregateElement(i));
+      if (tmp->isNullValue()) {
+        continue;
+      }
+      Type *type = tmp->getType();
+      if (type == ivar_list_t_type->getPointerTo()) {
+        info["IVARLIST"] = cast<ConstantExpr>(tmp);
+      } else if (type == property_list_t_type->getPointerTo()) {
+        info["PROPLIST"] = cast<ConstantExpr>(tmp);
+      } else if (type == objc_method_list_t_type->getPointerTo()) {
+        // Insert Methods
+        ConstantExpr *methodListCE = cast<ConstantExpr>(tmp);
+        // Note:methodListCE is also a BitCastConstantExpr
+        GlobalVariable *methodListGV =
+            cast<GlobalVariable>(methodListCE->getOperand(0));
+        // Now BitCast is stripped out.
+        assert(methodListGV->hasInitializer() &&
+               "MethodListGV doesn't have initializer");
+        ConstantStruct *methodListStruct =
+            cast<ConstantStruct>(methodListGV->getInitializer());
+        // Extracting %struct._objc_method array from %struct.__method_list_t =
+        // type { i32, i32, [0 x %struct._objc_method] }
+        info["METHODLIST"] =
+            cast<ConstantArray>(methodListStruct->getOperand(2));
+      }
+    }
+    return info;
+  } // splitclass_ro_t
+  void handleClass(GlobalVariable *GV, BasicBlock *BB) {
 
     assert(GV->hasInitializer() &&
            "ObjC Class Structure's Initializer Missing");
@@ -253,26 +294,7 @@ struct AntiClassDump : public ModulePass {
     SuperClassName = SuperClassName.substr(strlen("OBJC_CLASS_$_"));
     errs() << "Handling Class:" << ClassName
            << " With SuperClass:" << SuperClassName << "\n";
-
-    // We now prepare ObjC API Definitions
-
-    Module *M = IRB->GetInsertBlock()->getModule();
-    Function *objc_getClass = M->getFunction("objc_getClass");
-    Function *objc_allocateClassPair = M->getFunction("objc_allocateClassPair");
-    Function *objc_registerClassPair = M->getFunction("objc_registerClassPair");
-    //Type *Int8PtrTy = Type::getInt8PtrTy(M->getContext());
-    // End of ObjC API Definitions
-    // Start Allocating the class first
-    Value *SuperClassNameGV = IRB->CreateGlobalStringPtr(SuperClassName);
-    Value *ClassNameGV = IRB->CreateGlobalStringPtr(ClassName);
-    CallInst *BaseClass = IRB->CreateCall(objc_getClass, {SuperClassNameGV});
-    vector<Value *> allocateClsArgs;
-    allocateClsArgs.push_back(BaseClass);
-    allocateClsArgs.push_back(ClassNameGV);
-    allocateClsArgs.push_back(ConstantInt::get(
-        objc_allocateClassPair->getFunctionType()->getParamType(2), 0));
-    CallInst *Class = IRB->CreateCall(objc_allocateClassPair,
-                                      ArrayRef<Value *>(allocateClsArgs));
+    Module *M = BB->getModule();
     // Let's extract stuffs
     // struct _class_t {
     //   struct _class_t *isa;
@@ -281,34 +303,159 @@ struct AntiClassDump : public ModulePass {
     //   IMP *vtable;
     //   struct class_ro_t *ro;
     // }
-    GlobalVariable *metaclass_ro = dyn_cast<GlobalVariable>(CS->getOperand(0));
-    GlobalVariable *class_ro = dyn_cast<GlobalVariable>(CS->getOperand(4));
+    GlobalVariable *metaclassGV = cast<GlobalVariable>(CS->getOperand(0));
+    GlobalVariable *class_ro = cast<GlobalVariable>(CS->getOperand(4));
+    assert(metaclassGV->hasInitializer()&&"MetaClass GV Initializer Missing");
+    GlobalVariable* metaclass_ro=cast<GlobalVariable>(metaclassGV->getInitializer()->getOperand(metaclassGV->getInitializer()->getNumOperands()-1));
+    IRBuilder<> *IRB = NULL;
+      //Begin IRBuilder Initializing
+      if (flag == ACDMode::THIN) {
+          map<string, Value *> Info = splitclass_ro_t(cast<ConstantStruct>(metaclass_ro->getInitializer()), M);
+          BasicBlock *EntryBB = NULL;
+          if (Info.find("METHODLIST") != Info.end()) {
+              ConstantArray *method_list = cast<ConstantArray>(Info["METHODLIST"]);
+              for (unsigned i = 0; i < method_list->getNumOperands(); i++) {
+                  ConstantStruct *methodStruct =
+                  cast<ConstantStruct>(method_list->getOperand(i));
+                  // methodStruct has type %struct._objc_method = type { i8*, i8*, i8* }
+                  // which contains {GEP(NAME),GEP(TYPE),BitCast(IMP)}
+                  // Let's extract these info now
+                  // methodStruct->getOperand(0)->getOperand(0) is SELName
+                  GlobalVariable *SELNameGV=cast<GlobalVariable>(methodStruct->getOperand(0)->getOperand(0));
+                  ConstantDataSequential *SELNameCDS=cast<ConstantDataSequential>(SELNameGV->getInitializer());
+                  if(SELNameCDS->getAsCString()==StringRef("initialize")){
+                      Function* IMPFunc=cast<Function>(methodStruct->getOperand(2)->getOperand(0));
+                      errs()<<"Found Existing +initialize\n";
+                      EntryBB=&(IMPFunc->getEntryBlock());
+                  }
+                  else{
+                      errs()<<"Found SEL:"<<SELNameCDS->getAsCString()<<"\n";
+                  }
+              }
+          }
+          else{
+              errs()<<"Didn't Find ClassMethod List\n";
+          }
+          bool NeedTerminator=false;
+          if (EntryBB == NULL) {
+              NeedTerminator=true;
+              // We failed to find existing +initializer,create new one
+              errs()<<"Creating +initialize\n";
+              FunctionType *InitializerType = FunctionType::get(
+                                                                Type::getVoidTy(M->getContext()), ArrayRef<Type *>(), false);
+              Function *Initializer = Function::Create(InitializerType, GlobalValue::LinkageTypes::PrivateLinkage, "", M);
+              EntryBB =
+              BasicBlock::Create(M->getContext(), "", Initializer);
+          }
+          if(NeedTerminator){
+            IRBuilder<> foo(EntryBB);
+            foo.CreateRetVoid();
+          }
+          IRB= new IRBuilder<>(EntryBB,EntryBB->getFirstInsertionPt());
+      } else {
+          IRB = new IRBuilder<>(BB,BB->getFirstInsertionPt());
+
+      }
+    //End IRBuilder Initializing
+    // We now prepare ObjC API Definitions
+    Function *objc_getClass = M->getFunction("objc_getClass");
+    Function *objc_allocateClassPair = M->getFunction("objc_allocateClassPair");
+    Function *objc_registerClassPair = M->getFunction("objc_registerClassPair");
+    // Type *Int8PtrTy = Type::getInt8PtrTy(M->getContext());
+    // End of ObjC API Definitions
+    // Start Allocating the class first
+    Value *SuperClassNameGV = IRB->CreateGlobalStringPtr(SuperClassName);
+    Value *ClassNameGV = IRB->CreateGlobalStringPtr(ClassName);
+    CallInst *BaseClass = IRB->CreateCall(objc_getClass, {SuperClassNameGV});
     // Now Scan For Props and Ivars in OBJC_CLASS_RO AND OBJC_METACLASS_RO
     // Note that class_ro_t's structure is different for 32 and 64bit runtime
-    if (ConstantStruct *CS =
-            cast<ConstantStruct>(class_ro->getInitializer())) {
+    CallInst *Class =NULL;
+    if(flag == ACDMode::FULL){
+      /*
+      For full mode, we need to start from allocateClassPair
+      since we've wiped out class structures so there is not ObjC Runtime
+      to handle this part for us
+      */
+      vector<Value *> allocateClsArgs;
+      allocateClsArgs.push_back(BaseClass);
+      allocateClsArgs.push_back(ClassNameGV);
+      allocateClsArgs.push_back(ConstantInt::get(
+          objc_allocateClassPair->getFunctionType()->getParamType(2), 0));
+      Class = IRB->CreateCall(objc_allocateClassPair,
+                                        ArrayRef<Value *>(allocateClsArgs));
+      ConstantStruct *CS = cast<ConstantStruct>(class_ro->getInitializer());
+      errs()<<"Handling IVAR and Properties For Class:"<<ClassName<<"\n";
       HandlePropertyIvar(CS, IRB, M, Class);
+
+      IRB->CreateCall(objc_registerClassPair, {Class});
     }
-    IRB->CreateCall(objc_registerClassPair, {Class});
+    else{
+      //Otherwise just get existing empty class definition
+      Class=IRB->CreateCall(objc_getClass, {ClassNameGV});
+    }
     // FIXME:Fix ro flags
+    // FIXME:FULL MODE Wiping unimplemented
     // Now Metadata is available in Runtime.
-    // TODO:Add Methods
-    if (ConstantStruct *CS =
-            cast<ConstantStruct>(class_ro->getInitializer())) {
-      HandleMethods(CS,IRB,M,Class,false);
+    // Add Methods
+    if (ConstantStruct *CS = cast<ConstantStruct>(class_ro->getInitializer())) {
+      errs()<<"Handling Instance Methods For Class:"<<ClassName<<"\n";
+      HandleMethods(CS, IRB, M, Class, false);
+      if(flag == ACDMode::THIN){
+        Type* objc_method_type=M->getTypeByName("struct._objc_method");
+        ArrayType *AT=ArrayType::get(objc_method_type,0);
+        Constant *newMethodList=ConstantArray::get(AT,ArrayRef<Constant*>());
+        GlobalVariable *methodListGV=cast<GlobalVariable>(CS->getAggregateElement(5)->getOperand(0));//is striped MethodListGV
+        //This is broken ATM. see below
+        methodListGV->getInitializer()->handleOperandChange (methodListGV->getInitializer()->getOperand(2),newMethodList);
+
+        errs()<<"Updated ClassMethod Map of:"<<class_ro->getName()<<"\n";
+      }
     }
     if (ConstantStruct *CS =
             cast<ConstantStruct>(metaclass_ro->getInitializer())) {
-      HandleMethods(CS,IRB,M,Class,true);
+      errs()<<"Handling Class Methods For Class:"<<ClassName<<"\n";
+      HandleMethods(CS, IRB, M, Class, true);
+      if(flag == ACDMode::THIN){
+        //MethodList has index of 5
+        //We need to create a new type first then bitcast to required type later
+        //Since the original type's contained arraytype has count of 0
+        GlobalVariable *methodListGV=cast<GlobalVariable>(CS->getAggregateElement(5)->getOperand(0));//is striped MethodListGV
+        Type* objc_method_type=M->getTypeByName("struct._objc_method");
+        ArrayType *AT=ArrayType::get(objc_method_type,1);
+        Constant* MethName=cast<Constant>(IRB->CreateGlobalStringPtr("initialize"));
+        //This method signature is generated by clang
+        //See http://llvm.org/viewvc/llvm-project/cfe/trunk/lib/AST/ASTContext.cpp?revision=320954&view=markup
+        //ASTContext::getObjCEncodingForMethodDecl
+        //The one hard-coded here is generated for macOS 64Bit
+        Constant *MethType=cast<Constant>(IRB->CreateGlobalStringPtr("v16@0:8"));
+        Constant *BitCastedIMP=cast<Constant>(IRB->CreateBitCast(IRB->GetInsertBlock()->getParent(),objc_getClass->getFunctionType()->getParamType(0)));
+        vector<Constant*> methodStructContents;//{GEP(NAME),GEP(TYPE),IMP}
+        methodStructContents.push_back(MethName);
+        methodStructContents.push_back(MethType);
+        methodStructContents.push_back(BitCastedIMP);
+        Constant *newMethod=ConstantStruct::get(cast<StructType>(objc_method_type),ArrayRef<Constant*>(methodStructContents));//objc_method_t
+        Constant *newMethodList=ConstantArray::get(AT,ArrayRef<Constant*>(newMethod));//Container of objc_method_t
+        StructType* oldGVType=cast<StructType>(methodListGV->getInitializer()->getType());
+        vector<Type*> newStructType;
+        //I'm fully aware that it's consistent Int32 on all platforms
+        //This is future-proof
+        newStructType.push_back(oldGVType->getElementType(0));
+        newStructType.push_back(oldGVType->getElementType(1));
+        newStructType.push_back(ArrayType::get(objc_method_type,0));
+        //FIXME: Replace l_OBJC_$_CLASS_METHODS_ with minimum effort
+        Constant *newMethodStruct=ConstantStruct::get()//l_OBJC_$_CLASS_METHODS_
+
+      }
     }
-  }
+  } // handleClass
   void HandleMethods(ConstantStruct *class_ro, IRBuilder<> *IRB, Module *M,
                      Value *Class, bool isMetaClass) {
     Function *sel_registerName = M->getFunction("sel_registerName");
     Function *class_replaceMethod = M->getFunction("class_replaceMethod");
     Function *class_getName = M->getFunction("class_getName");
     Function *objc_getMetaClass = M->getFunction("objc_getMetaClass");
-    StructType *objc_method_list_t_type=M->getTypeByName("struct.__method_list_t");
+    StructType *objc_method_list_t_type =
+        M->getTypeByName("struct.__method_list_t");
     for (unsigned i = 0; i < class_ro->getType()->getNumElements(); i++) {
       Constant *tmp = dyn_cast<Constant>(class_ro->getAggregateElement(i));
       if (tmp->isNullValue()) {
@@ -316,43 +463,48 @@ struct AntiClassDump : public ModulePass {
       }
       Type *type = tmp->getType();
       if (type == objc_method_list_t_type->getPointerTo()) {
-        //Insert Methods
-        ConstantExpr* methodListCE=cast<ConstantExpr>(tmp);
-        //Note:methodListCE is also a BitCastConstantExpr
-        GlobalVariable *methodListGV = dyn_cast<GlobalVariable>(methodListCE->getOperand(0));
-        //Now BitCast is stripped out.
-        assert(methodListGV->hasInitializer()&&"MethodListGV doesn't have initializer");
-        ConstantStruct* methodListStruct=cast<ConstantStruct>(methodListGV->getInitializer());
-        //Extracting %struct._objc_method array from %struct.__method_list_t = type { i32, i32, [0 x %struct._objc_method] }
-        ConstantArray* methodList=cast<ConstantArray>(methodListStruct->getOperand(2));
-        for(unsigned i=0;i<methodList->getNumOperands();i++){
-          ConstantStruct* methodStruct=cast<ConstantStruct>(methodList->getOperand(i));
-          //methodStruct has type %struct._objc_method = type { i8*, i8*, i8* }
-          //which contains {GEP(NAME),GEP(TYPE),IMP}
-          //Let's extract these info now
-          //We should first register the selector
-          CallInst* SEL=IRB->CreateCall(sel_registerName,{methodStruct->getOperand(0)});
-          Type* IMPType=class_replaceMethod->getFunctionType()->getParamType(2);
-          Value* BitCastedIMP=IRB->CreateBitCast(methodStruct->getOperand(2),IMPType);
-          vector<Value*> replaceMethodArgs;
-          if(isMetaClass){
-            CallInst* className=IRB->CreateCall(class_getName,{Class});
-            CallInst* MetaClass=IRB->CreateCall(objc_getMetaClass,{className});
-            replaceMethodArgs.push_back(MetaClass);//Class
+        // Insert Methods
+        ConstantExpr *methodListCE = cast<ConstantExpr>(tmp);
+        // Note:methodListCE is also a BitCastConstantExpr
+        GlobalVariable *methodListGV =
+            dyn_cast<GlobalVariable>(methodListCE->getOperand(0));
+        // Now BitCast is stripped out.
+        assert(methodListGV->hasInitializer() &&
+               "MethodListGV doesn't have initializer");
+        ConstantStruct *methodListStruct =
+            cast<ConstantStruct>(methodListGV->getInitializer());
+        // Extracting %struct._objc_method array from %struct.__method_list_t =
+        // type { i32, i32, [0 x %struct._objc_method] }
+        ConstantArray *methodList =
+            cast<ConstantArray>(methodListStruct->getOperand(2));
+        for (unsigned i = 0; i < methodList->getNumOperands(); i++) {
+          ConstantStruct *methodStruct =
+              cast<ConstantStruct>(methodList->getOperand(i));
+          // methodStruct has type %struct._objc_method = type { i8*, i8*, i8* }
+          // which contains {GEP(NAME),GEP(TYPE),IMP}
+          // Let's extract these info now
+          // We should first register the selector
+          CallInst *SEL =
+              IRB->CreateCall(sel_registerName, {methodStruct->getOperand(0)});
+          Type *IMPType =
+              class_replaceMethod->getFunctionType()->getParamType(2);
+          Value *BitCastedIMP =
+              IRB->CreateBitCast(methodStruct->getOperand(2), IMPType);
+          vector<Value *> replaceMethodArgs;
+          if (isMetaClass) {
+            CallInst *className = IRB->CreateCall(class_getName, {Class});
+            CallInst *MetaClass =
+                IRB->CreateCall(objc_getMetaClass, {className});
+            replaceMethodArgs.push_back(MetaClass); // Class
+          } else {
+            replaceMethodArgs.push_back(Class); // Class
           }
-          else{
-            replaceMethodArgs.push_back(Class);//Class
-          }
-          replaceMethodArgs.push_back(SEL);//SEL
-          //FIXME: IMP need bitcasting
-          replaceMethodArgs.push_back(BitCastedIMP);//imp
-          replaceMethodArgs.push_back(methodStruct->getOperand(1));//type
-          IRB->CreateCall(class_replaceMethod,ArrayRef<Value*>(replaceMethodArgs));
-
+          replaceMethodArgs.push_back(SEL); // SEL
+          replaceMethodArgs.push_back(BitCastedIMP);                // imp
+          replaceMethodArgs.push_back(methodStruct->getOperand(1)); // type
+          IRB->CreateCall(class_replaceMethod,
+                          ArrayRef<Value *>(replaceMethodArgs));
         }
-
-
-
       }
     }
   }
@@ -405,7 +557,8 @@ struct AntiClassDump : public ModulePass {
     // We need to extract correct operands,which point to corresponding
     // GlobalVariable
     if (ivar_list != NULL) {
-      GlobalVariable *GV = dyn_cast<GlobalVariable>(ivar_list->getOperand(0));//Equal to casted stripPointerCasts()
+      GlobalVariable *GV = dyn_cast<GlobalVariable>(
+          ivar_list->getOperand(0)); // Equal to casted stripPointerCasts()
       assert(GV && "_OBJC_$_INSTANCE_VARIABLES Missing");
       assert(GV->hasInitializer() &&
              "_OBJC_$_INSTANCE_VARIABLES Missing Initializer");
@@ -441,8 +594,8 @@ struct AntiClassDump : public ModulePass {
     }
     if (property_list != NULL) {
 
-      GlobalVariable *GV =
-          cast<GlobalVariable>(property_list->getOperand(0));//Equal to casted stripPointerCasts()
+      GlobalVariable *GV = cast<GlobalVariable>(
+          property_list->getOperand(0)); // Equal to casted stripPointerCasts()
       assert(GV && "OBJC_$_PROP_LIST Missing");
       assert(GV->hasInitializer() && "OBJC_$_PROP_LIST Missing Initializer");
       ConstantArray *propArray =
@@ -462,11 +615,11 @@ struct AntiClassDump : public ModulePass {
                 ->getAsCString();
         SmallVector<StringRef, 8> attrComponents;
         attrString.split(attrComponents, ',');
-        map<string, string>
-            propMap; // First character is key, remaining parts are value.This
-                     // is used to generate pairs of attributes
-        vector<Constant *> attrs; // Save Each Single Attr for later use
-        vector<Value *> zeroes;   // Indexes used for creating GEP
+        map<string, string> propMap; // First character is key, remaining parts
+                                     // are value.This is used to generate pairs
+                                     // of attributes
+        vector<Constant *> attrs;    // Save Each Single Attr for later use
+        vector<Value *> zeroes;      // Indexes used for creating GEP
         zeroes.push_back(
             ConstantInt::get(Type::getInt32Ty(M->getContext()), 0));
         zeroes.push_back(
@@ -512,9 +665,9 @@ struct AntiClassDump : public ModulePass {
     }
   }
 };
-void addAntiClassDumpPass(legacy::PassManagerBase &PM) {
+void addAntiClassDumpPass(legacy::PassManagerBase &PM, ACDMode flag) {
   if (EnableAntiClassDump) {
-    PM.add(new AntiClassDump());
+    PM.add(new AntiClassDump(flag));
   }
 }
 } // namespace llvm
