@@ -6,6 +6,7 @@
  *  are not considered
  *  See HikariProject's blog for details
  */
+#include "llvm/ADT/Triple.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
@@ -18,13 +19,12 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include "llvm/ADT/Triple.h"
 #include <algorithm>
+#include <cassert>
 #include <cstdlib>
 #include <deque>
 #include <iostream>
 #include <string>
-#include <cassert>
 using namespace llvm;
 using namespace std;
 static cl::opt<bool>
@@ -37,10 +37,11 @@ struct AntiClassDump : public ModulePass {
   virtual bool doInitialization(Module &M) override {
     // Basic Defs
     Triple tri(M.getTargetTriple());
-    if(tri.getVendor ()!=Triple::VendorType::Apple){
-      //We only support AAPL's ObjC Implementation ATM
-        errs() << M.getTargetTriple()
-               << " is Not Supported For LLVM AntiClassDump\nProbably GNU Step?\n";
+    if (tri.getVendor() != Triple::VendorType::Apple) {
+      // We only support AAPL's ObjC Implementation ATM
+      errs()
+          << M.getTargetTriple()
+          << " is Not Supported For LLVM AntiClassDump\nProbably GNU Step?\n";
       return false;
     }
     Type *Int64Ty = Type::getInt64Ty(M.getContext());
@@ -91,12 +92,12 @@ struct AntiClassDump : public ModulePass {
     addPropTypeVector.push_back(Int8PtrTy);
     addPropTypeVector.push_back(Int8PtrTy);
     addPropTypeVector.push_back(objc_property_attribute_t_type->getPointerTo());
-    if (tri.isArch64Bit ()) {
+    if (tri.isArch64Bit()) {
       // We are 64Bit Device
       allocaClsTypeVector.push_back(Int64Ty);
       addIvarTypeVector.push_back(Int64Ty);
       addPropTypeVector.push_back(Int64Ty);
-    } else{
+    } else {
       // Not 64Bit.However we are still on apple platform.So We are
       // ARMV7/ARMV7S/i386
       // PowerPC is ignored, feel free to open a PR if you want to
@@ -106,16 +107,22 @@ struct AntiClassDump : public ModulePass {
     }
     addIvarTypeVector.push_back(Int8Ty);
     addIvarTypeVector.push_back(Int8PtrTy);
-    //Types Collected. Now Inject Functions
+    // Types Collected. Now Inject Functions
     FunctionType *allocaClsType = FunctionType::get(
         Int8PtrTy, ArrayRef<Type *>(allocaClsTypeVector), false);
     M.getOrInsertFunction("objc_allocateClassPair", allocaClsType);
-    FunctionType *addIvarType = FunctionType::get(
-        Int8Ty, ArrayRef<Type *>(addIvarTypeVector), false);
-    M.getOrInsertFunction("class_addIvar",addIvarType);
-    FunctionType *addPropType = FunctionType::get(
-        Int8Ty, ArrayRef<Type *>(addPropTypeVector), false);
-    M.getOrInsertFunction("class_addProperty",addPropType);
+    FunctionType *addIvarType =
+        FunctionType::get(Int8Ty, ArrayRef<Type *>(addIvarTypeVector), false);
+    M.getOrInsertFunction("class_addIvar", addIvarType);
+    FunctionType *addPropType =
+        FunctionType::get(Int8Ty, ArrayRef<Type *>(addPropTypeVector), false);
+    M.getOrInsertFunction("class_addProperty", addPropType);
+    FunctionType *class_getName_Type =
+        FunctionType::get(Int8Ty,{Int8Ty}, false);
+    M.getOrInsertFunction("class_getName",class_getName_Type);
+    FunctionType *objc_getMetaClass_Type =
+        FunctionType::get(Int8Ty,{Int8Ty}, false);
+    M.getOrInsertFunction("objc_getMetaClass",objc_getMetaClass_Type);
     return true;
   }
   bool runOnModule(Module &M) override {
@@ -129,11 +136,14 @@ struct AntiClassDump : public ModulePass {
     IRBuilder<> IRB(EntryBB);
     //
     assert(OLCGV != NULL && "OBJC_LABEL_CLASS_$ Missing.");
-    assert(OLCGV->hasInitializer() && "OBJC_LABEL_CLASS_$ Doesn't Have Initializer.");
+    assert(OLCGV->hasInitializer() &&
+           "OBJC_LABEL_CLASS_$ Doesn't Have Initializer.");
     ConstantArray *OBJC_LABEL_CLASS_CDS =
         dyn_cast<ConstantArray>(OLCGV->getInitializer());
 
-    assert(OBJC_LABEL_CLASS_CDS && "OBJC_LABEL_CLASS_$ Not ConstantArray.Is the target using unsupported legacy runtime?");
+    assert(OBJC_LABEL_CLASS_CDS &&
+           "OBJC_LABEL_CLASS_$ Not ConstantArray.Is the target using "
+           "unsupported legacy runtime?");
     vector<string> readyclses; // This is for storing classes that can be used
                                // in handleClass()
     deque<string> tmpclses;    // This is temporary storage for classes
@@ -196,7 +206,8 @@ struct AntiClassDump : public ModulePass {
     for (string className : readyclses) {
       handleClass(GVMapping[className], &IRB);
     }
-    // TODO:Wipe out old Structures
+    // TODO:Wipe out old Structures.This involves replacing Class Structures
+    //referenced by objc_msgSend calls with objc_getClass call.
     // TODO:Add our initializer to llvm.global_ctors
     // Append Terminator
     IRB.CreateRetVoid();
@@ -221,8 +232,6 @@ struct AntiClassDump : public ModulePass {
     Function *objc_allocateClassPair = M->getFunction("objc_allocateClassPair");
     Function *objc_registerClassPair = M->getFunction("objc_registerClassPair");
     Function *objc_getMetaClass = M->getFunction("objc_getMetaClass");
-    Function *sel_registerName = M->getFunction("sel_registerName");
-    Function *class_replaceMethod = M->getFunction("class_replaceMethod");
     Type *Int8PtrTy = Type::getInt8PtrTy(M->getContext());
     FunctionType *IMPType =
         FunctionType::get(Int8PtrTy, {Int8PtrTy, Int8PtrTy}, true);
@@ -252,16 +261,80 @@ struct AntiClassDump : public ModulePass {
     // Now Scan For Props and Ivars in OBJC_CLASS_RO AND OBJC_METACLASS_RO
     // Note that class_ro_t's structure is different for 32 and 64bit runtime
     if (ConstantStruct *CS =
-            dyn_cast<ConstantStruct>(class_ro->getInitializer())) {
-      HandlePropertyIvar(CS, IRB, M,Class);
+            cast<ConstantStruct>(class_ro->getInitializer())) {
+      HandlePropertyIvar(CS, IRB, M, Class);
     }
     IRB->CreateCall(objc_registerClassPair, {Class});
     // FIXME:Fix ro flags
     // Now Metadata is available in Runtime.
     // TODO:Add Methods
+    if (ConstantStruct *CS =
+            cast<ConstantStruct>(class_ro->getInitializer())) {
+      HandleMethods(CS,IRB,M,Class,false);
+    }
+    if (ConstantStruct *CS =
+            cast<ConstantStruct>(metaclass_ro->getInitializer())) {
+      HandleMethods(CS,IRB,M,Class,true);
+    }
   }
-  void HandlePropertyIvar(ConstantStruct *class_ro, IRBuilder<> *IRB,
-                          Module *M,Value* Class) {
+  void HandleMethods(ConstantStruct *class_ro, IRBuilder<> *IRB, Module *M,
+                     Value *Class, bool isMetaClass) {
+    Function *sel_registerName = M->getFunction("sel_registerName");
+    Function *class_replaceMethod = M->getFunction("class_replaceMethod");
+    Function *class_getName = M->getFunction("class_getName");
+    Function *objc_getMetaClass = M->getFunction("objc_getMetaClass");
+    StructType *objc_method_list_t_type=M->getTypeByName("struct.__method_list_t");
+    for (unsigned i = 0; i < class_ro->getType()->getNumElements(); i++) {
+      Constant *tmp = dyn_cast<Constant>(class_ro->getAggregateElement(i));
+      if (tmp->isNullValue()) {
+        continue;
+      }
+      Type *type = tmp->getType();
+      if (type == objc_method_list_t_type->getPointerTo()) {
+        //Insert Methods
+        ConstantExpr* methodListCE=cast<ConstantExpr>(tmp);
+        //Note:methodListCE is also a BitCastConstantExpr
+        GlobalVariable *methodListGV = dyn_cast<GlobalVariable>(methodListCE->getOperand(0));
+        //Now BitCast is stripped out.
+        assert(methodListGV->hasInitializer()&&"MethodListGV doesn't have initializer");
+        ConstantStruct* methodListStruct=cast<ConstantStruct>(methodListGV->getInitializer());
+        //Extracting %struct._objc_method array from %struct.__method_list_t = type { i32, i32, [0 x %struct._objc_method] }
+        ConstantArray* methodList=cast<ConstantArray>(methodListStruct->getOperand(2));
+        for(unsigned i=0;i<methodList->getNumOperands();i++){
+          ConstantStruct* methodStruct=cast<ConstantStruct>(methodList->getOperand(i));
+          //methodStruct has type %struct._objc_method = type { i8*, i8*, i8* }
+          //which contains {GEP(NAME),GEP(TYPE),IMP}
+          //Let's extract these info now
+          //We should first register the selector
+          CallInst* SEL=IRB->CreateCall(sel_registerName,{methodStruct->getOperand(0)});
+          vector<Value*> replaceMethodArgs;
+          if(isMetaClass){
+            CallInst* className=IRB->CreateCall(class_getName,{Class});
+            CallInst* MetaClass=IRB->CreateCall(objc_getMetaClass,{className});
+            replaceMethodArgs.push_back(MetaClass);//Class
+          }
+          else{
+            replaceMethodArgs.push_back(Class);//Class
+          }
+          replaceMethodArgs.push_back(SEL);//SEL
+          //FIXME: IMP need bitcasting
+          replaceMethodArgs.push_back(methodStruct->getOperand(2));//imp
+          replaceMethodArgs.push_back(methodStruct->getOperand(1));//type
+          for(Value* val:replaceMethodArgs){
+            val->getType()->dump();
+          }
+          class_replaceMethod->getFunctionType()->dump();
+          IRB->CreateCall(class_replaceMethod,ArrayRef<Value*>(replaceMethodArgs));
+
+        }
+
+
+
+      }
+    }
+  }
+  void HandlePropertyIvar(ConstantStruct *class_ro, IRBuilder<> *IRB, Module *M,
+                          Value *Class) {
     StructType *objc_property_attribute_t_type = reinterpret_cast<StructType *>(
         M->getTypeByName("struct.objc_property_attribute_t"));
     Function *class_addProperty = M->getFunction("class_addProperty");
@@ -294,96 +367,124 @@ struct AntiClassDump : public ModulePass {
     // This is outrageous mess. Can we do better?
     for (unsigned i = 0; i < class_ro->getType()->getNumElements(); i++) {
       Constant *tmp = dyn_cast<Constant>(class_ro->getAggregateElement(i));
-      if(tmp->isNullValue ()){
+      if (tmp->isNullValue()) {
         continue;
       }
-      Type* type=tmp->getType();
-      if(type==ivar_list_t_type->getPointerTo()){
-        ivar_list=dyn_cast<ConstantExpr>(tmp);
-      }
-      else if(type==property_list_t_type->getPointerTo()){
-        property_list=dyn_cast<ConstantExpr>(tmp);
+      Type *type = tmp->getType();
+      if (type == ivar_list_t_type->getPointerTo()) {
+        ivar_list = dyn_cast<ConstantExpr>(tmp);
+      } else if (type == property_list_t_type->getPointerTo()) {
+        property_list = dyn_cast<ConstantExpr>(tmp);
       }
     }
     // End Struct Loading
-    //The ConstantExprs are actually BitCasts
-    //We need to extract correct operands,which point to corresponding GlobalVariable
-    if(ivar_list!=NULL){
-      GlobalVariable* GV=dyn_cast<GlobalVariable>(ivar_list->getOperand(0));
-      assert(GV&& "_OBJC_$_INSTANCE_VARIABLES Missing");
-      assert(GV->hasInitializer() && "_OBJC_$_INSTANCE_VARIABLES Missing Initializer");
-      ConstantArray *ivarArray=dyn_cast<ConstantArray>(GV->getInitializer()->getOperand(2));
-      for(unsigned i=0;i<ivarArray->getNumOperands();i++){
-        //struct _ivar_t
-        ConstantStruct* ivar=dyn_cast<ConstantStruct>(ivarArray->getOperand(i));
-        ConstantExpr* GEPName=dyn_cast<ConstantExpr>(ivar->getOperand(1));
-        ConstantExpr* GEPType=dyn_cast<ConstantExpr>(ivar->getOperand(2));
-        uint64_t alignment_junk=dyn_cast<ConstantInt>(ivar->getOperand(3))->getZExtValue () ;
-        uint64_t size_junk=dyn_cast<ConstantInt>(ivar->getOperand(4))->getZExtValue () ;
-        //Note alignment and size are int32 on both 32/64bit Target
-        //However ObjC APIs take size_t argument, which is platform dependent.WTF Apple?
-        //We need to re-create ConstantInt with correct type so we can pass verifier
-        //Instead of doing Triple Switching Again.Let's extract type from function definition
-        Constant* size=ConstantInt::get(class_addIvar->getFunctionType()->getParamType(2),size_junk);
-        Constant* alignment=ConstantInt::get(class_addIvar->getFunctionType()->getParamType(3),alignment_junk);
-        vector<Value*> addIvar_args;
+    // The ConstantExprs are actually BitCasts
+    // We need to extract correct operands,which point to corresponding
+    // GlobalVariable
+    if (ivar_list != NULL) {
+      GlobalVariable *GV = dyn_cast<GlobalVariable>(ivar_list->getOperand(0));//Equal to casted stripPointerCasts()
+      assert(GV && "_OBJC_$_INSTANCE_VARIABLES Missing");
+      assert(GV->hasInitializer() &&
+             "_OBJC_$_INSTANCE_VARIABLES Missing Initializer");
+      ConstantArray *ivarArray =
+          dyn_cast<ConstantArray>(GV->getInitializer()->getOperand(2));
+      for (unsigned i = 0; i < ivarArray->getNumOperands(); i++) {
+        // struct _ivar_t
+        ConstantStruct *ivar =
+            dyn_cast<ConstantStruct>(ivarArray->getOperand(i));
+        ConstantExpr *GEPName = dyn_cast<ConstantExpr>(ivar->getOperand(1));
+        ConstantExpr *GEPType = dyn_cast<ConstantExpr>(ivar->getOperand(2));
+        uint64_t alignment_junk =
+            dyn_cast<ConstantInt>(ivar->getOperand(3))->getZExtValue();
+        uint64_t size_junk =
+            dyn_cast<ConstantInt>(ivar->getOperand(4))->getZExtValue();
+        // Note alignment and size are int32 on both 32/64bit Target
+        // However ObjC APIs take size_t argument, which is platform
+        // dependent.WTF Apple?  We need to re-create ConstantInt with correct
+        // type so we can pass verifier  Instead of doing Triple Switching
+        // Again.Let's extract type from function definition
+        Constant *size = ConstantInt::get(
+            class_addIvar->getFunctionType()->getParamType(2), size_junk);
+        Constant *alignment = ConstantInt::get(
+            class_addIvar->getFunctionType()->getParamType(3), alignment_junk);
+        vector<Value *> addIvar_args;
         addIvar_args.push_back(Class);
         addIvar_args.push_back(GEPName);
         addIvar_args.push_back(size);
         addIvar_args.push_back(alignment);
         addIvar_args.push_back(GEPType);
-        IRB->CreateCall(class_addIvar,ArrayRef<Value*>(addIvar_args));
+        IRB->CreateCall(class_addIvar, ArrayRef<Value *>(addIvar_args));
       }
     }
-    if(property_list!=NULL){
-      GlobalVariable* GV=dyn_cast<GlobalVariable>(property_list->getOperand(0));
-      assert(GV&& "OBJC_$_PROP_LIST Missing");
+    if (property_list != NULL) {
+
+      GlobalVariable *GV =
+          cast<GlobalVariable>(property_list->getOperand(0));//Equal to casted stripPointerCasts()
+      assert(GV && "OBJC_$_PROP_LIST Missing");
       assert(GV->hasInitializer() && "OBJC_$_PROP_LIST Missing Initializer");
-      ConstantArray *propArray=dyn_cast<ConstantArray>(GV->getInitializer()->getOperand(2));
-      for(unsigned i=0;i<propArray->getNumOperands();i++){
-        //struct _prop_t
-        ConstantStruct* prop=dyn_cast<ConstantStruct>(propArray->getOperand(i));
-        ConstantExpr* GEPName=dyn_cast<ConstantExpr>(prop->getOperand(0));
-        ConstantExpr* GEPAttri=dyn_cast<ConstantExpr>(prop->getOperand(1));
-        GlobalVariable *AttrGV=dyn_cast<GlobalVariable>(GEPAttri->getOperand(0));
-        assert(AttrGV->hasInitializer() && "ObjC Property GV Don't Have Initializer");
-        StringRef attrString=dyn_cast<ConstantDataSequential>(AttrGV->getInitializer())->getAsCString();
-        SmallVector<StringRef,8> attrComponents;
-        attrString.split(attrComponents,',');
-        map<string,string> propMap;//First character is key, remaining parts are value.This is used to generate pairs of attributes
-        vector<Constant*> attrs;//Save Each Single Attr for later use
-        vector<Value*> zeroes;//Indexes used for creating GEP
-        zeroes.push_back(ConstantInt::get(Type::getInt32Ty(M->getContext()), 0));
-        zeroes.push_back(ConstantInt::get(Type::getInt32Ty(M->getContext()), 0));
-        for(StringRef s:attrComponents){
-          StringRef key=s.substr(0,1);
-          StringRef value=s.substr(1);
-          propMap[key]=value;
-          vector<Constant*> tmp;
-          Constant* KeyConst=dyn_cast<Constant>(IRB->CreateGlobalStringPtr(key));
-          Constant* ValueConst=dyn_cast<Constant>(IRB->CreateGlobalStringPtr(value));
+      ConstantArray *propArray =
+          dyn_cast<ConstantArray>(GV->getInitializer()->getOperand(2));
+      for (unsigned i = 0; i < propArray->getNumOperands(); i++) {
+        // struct _prop_t
+        ConstantStruct *prop =
+            dyn_cast<ConstantStruct>(propArray->getOperand(i));
+        ConstantExpr *GEPName = dyn_cast<ConstantExpr>(prop->getOperand(0));
+        ConstantExpr *GEPAttri = dyn_cast<ConstantExpr>(prop->getOperand(1));
+        GlobalVariable *AttrGV =
+            dyn_cast<GlobalVariable>(GEPAttri->getOperand(0));
+        assert(AttrGV->hasInitializer() &&
+               "ObjC Property GV Don't Have Initializer");
+        StringRef attrString =
+            dyn_cast<ConstantDataSequential>(AttrGV->getInitializer())
+                ->getAsCString();
+        SmallVector<StringRef, 8> attrComponents;
+        attrString.split(attrComponents, ',');
+        map<string, string>
+            propMap; // First character is key, remaining parts are value.This
+                     // is used to generate pairs of attributes
+        vector<Constant *> attrs; // Save Each Single Attr for later use
+        vector<Value *> zeroes;   // Indexes used for creating GEP
+        zeroes.push_back(
+            ConstantInt::get(Type::getInt32Ty(M->getContext()), 0));
+        zeroes.push_back(
+            ConstantInt::get(Type::getInt32Ty(M->getContext()), 0));
+        for (StringRef s : attrComponents) {
+          StringRef key = s.substr(0, 1);
+          StringRef value = s.substr(1);
+          propMap[key] = value;
+          vector<Constant *> tmp;
+          Constant *KeyConst =
+              dyn_cast<Constant>(IRB->CreateGlobalStringPtr(key));
+          Constant *ValueConst =
+              dyn_cast<Constant>(IRB->CreateGlobalStringPtr(value));
           tmp.push_back(KeyConst);
           tmp.push_back(ValueConst);
-          Constant* attr=ConstantStruct::get(property_t_type,ArrayRef<Constant*>(tmp));
+          Constant *attr =
+              ConstantStruct::get(property_t_type, ArrayRef<Constant *>(tmp));
           attrs.push_back(attr);
         }
-        ArrayType* ATType=ArrayType::get(property_t_type,attrs.size());
-        Constant* CA=ConstantArray::get(ATType,ArrayRef<Constant*>(attrs));
-        AllocaInst* attrInMem=IRB->CreateAlloca(ATType);
-        IRB->CreateStore(CA,attrInMem);
-        //attrInMem has type [n x %struct.objc_property_attribute_t]*
-        //We need to bitcast it to %struct.objc_property_attribute_t* to silent GEP's type check
-        Value* BitCastedFromArrayToPtr=IRB->CreateBitCast(attrInMem,objc_property_attribute_t_type->getPointerTo());
-        Value* GEP=IRB->CreateInBoundsGEP(BitCastedFromArrayToPtr,zeroes);
-        //Now GEP is done.
-        //BitCast it back to our required type
-        Value* GEPBitCasedToArg=IRB->CreateBitCast(GEP,class_addProperty->getFunctionType()->getParamType(2));
-        vector<Value*> addProp_args;
+        ArrayType *ATType = ArrayType::get(property_t_type, attrs.size());
+        Constant *CA = ConstantArray::get(ATType, ArrayRef<Constant *>(attrs));
+        AllocaInst *attrInMem = IRB->CreateAlloca(ATType);
+        IRB->CreateStore(CA, attrInMem);
+        // attrInMem has type [n x %struct.objc_property_attribute_t]*
+        // We need to bitcast it to %struct.objc_property_attribute_t* to silent
+        // GEP's type check
+        Value *BitCastedFromArrayToPtr = IRB->CreateBitCast(
+            attrInMem, objc_property_attribute_t_type->getPointerTo());
+        Value *GEP = IRB->CreateInBoundsGEP(BitCastedFromArrayToPtr, zeroes);
+        // Now GEP is done.
+        // BitCast it back to our required type
+        Value *GEPBitCasedToArg = IRB->CreateBitCast(
+            GEP, class_addProperty->getFunctionType()->getParamType(2));
+        vector<Value *> addProp_args;
         addProp_args.push_back(Class);
         addProp_args.push_back(GEPName);
         addProp_args.push_back(GEPBitCasedToArg);
-        addProp_args.push_back(ConstantInt::get(class_addProperty->getFunctionType()->getParamType(3),attrs.size()));
-        IRB->CreateCall(class_addProperty,ArrayRef<Value*>(addProp_args));
+        addProp_args.push_back(ConstantInt::get(
+            class_addProperty->getFunctionType()->getParamType(3),
+            attrs.size()));
+        IRB->CreateCall(class_addProperty, ArrayRef<Value *>(addProp_args));
       }
     }
   }
