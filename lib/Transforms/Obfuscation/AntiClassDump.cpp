@@ -394,8 +394,6 @@ struct AntiClassDump : public ModulePass {
         vector<Constant*> newStructValue;
         //I'm fully aware that it's consistent Int32 on all platforms
         //This is future-proof
-        //TODO: Fix method count
-
         newStructType.push_back(oldGVType->getElementType(0));
         newStructValue.push_back(methodListGV->getInitializer()->getAggregateElement(0u));
         newStructType.push_back(oldGVType->getElementType(1));
@@ -459,7 +457,6 @@ struct AntiClassDump : public ModulePass {
         vector<Constant*> newStructValue;
         //I'm fully aware that it's consistent Int32 on all platforms
         //This is future-proof
-        //TODO: Fix method count
         newStructType.push_back(oldGVType->getElementType(0));
         newStructValue.push_back(methodListGV->getInitializer()->getAggregateElement(0u));
         newStructType.push_back(oldGVType->getElementType(1));
@@ -532,6 +529,11 @@ struct AntiClassDump : public ModulePass {
           // Let's extract these info now
           // We should first register the selector
           // FIXME: Filter +initialize for thin mode
+          StringRef SELName=cast<ConstantDataSequential>(cast<GlobalVariable>(methodStruct->getOperand(0)->stripPointerCasts())->getInitializer())->getAsCString();
+          if(flag==ACDMode::THIN && SELName==StringRef("initialize")){
+            //We dont register +initialize in thin mode as this is handled by libObjC
+            continue;
+          }
           CallInst *SEL =
               IRB->CreateCall(sel_registerName, {methodStruct->getOperand(0)});
           Type *IMPType =
