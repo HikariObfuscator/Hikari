@@ -531,6 +531,7 @@ struct AntiClassDump : public ModulePass {
           // which contains {GEP(NAME),GEP(TYPE),IMP}
           // Let's extract these info now
           // We should first register the selector
+          // FIXME: Filter +initialize for thin mode
           CallInst *SEL =
               IRB->CreateCall(sel_registerName, {methodStruct->getOperand(0)});
           Type *IMPType =
