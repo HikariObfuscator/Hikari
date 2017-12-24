@@ -7,6 +7,7 @@
  *  See HikariProject's blog for details
  */
 /*
+  !!Spaghetti code inside!!
   For maximum usability. We provide two modes for this pass, as defined in
   llvm/Transforms/Obfuscation/AntiClassDump.h THIN mode is used on per-module
   basis without LTO overhead and structs are left in the module where possible.
@@ -226,24 +227,6 @@ struct AntiClassDump : public ModulePass {
     for (string className : readyclses) {
       handleClass(GVMapping[className], EntryBB);
     }
-    // TODO:Wipe out old Structures.This involves replacing Class Structures
-    // referenced by objc_msgSend calls with objc_getClass call.
-    // Let's iterate class structs and replace them with objc_getClass calls
-
-    ArrayType *newOLCType =
-        ArrayType::get(Type::getInt8PtrTy(M.getContext()), 0);
-    Constant *newOLCGVInit = ConstantArray::get(newOLCType, {});
-
-    OLCGV->removeFromParent();
-    GlobalVariable *newOLCGV = new GlobalVariable(
-        M, newOLCType, true, GlobalValue::LinkageTypes::PrivateLinkage,
-        newOLCGVInit, "OBJC_LABEL_CLASS_$");
-    newOLCGV->copyAttributesFrom(OLCGV);
-    // ReplaceUnsafe(OLCGV,newOLCGV);
-    // OLCGV->eraseFromParent();
-
-    // TODO:Add our initializer to llvm.global_ctors
-    // Append Terminator for global ctor
     return true;
   } // runOnModule
   map<string, Value *>
@@ -405,8 +388,23 @@ struct AntiClassDump : public ModulePass {
         ArrayType *AT=ArrayType::get(objc_method_type,0);
         Constant *newMethodList=ConstantArray::get(AT,ArrayRef<Constant*>());
         GlobalVariable *methodListGV=cast<GlobalVariable>(CS->getAggregateElement(5)->getOperand(0));//is striped MethodListGV
-        //This is broken ATM. see below
-        methodListGV->getInitializer()->handleOperandChange (methodListGV->getInitializer()->getOperand(2),newMethodList);
+        StructType* oldGVType=cast<StructType>(methodListGV->getInitializer()->getType());
+        vector<Type*> newStructType;
+        vector<Constant*> newStructValue;
+        //I'm fully aware that it's consistent Int32 on all platforms
+        //This is future-proof
+        newStructType.push_back(oldGVType->getElementType(0));
+        newStructValue.push_back(methodListGV->getInitializer()->getAggregateElement(0u));
+        newStructType.push_back(oldGVType->getElementType(1));
+        newStructValue.push_back(methodListGV->getInitializer()->getAggregateElement(1u));
+        newStructType.push_back(AT);
+        newStructValue.push_back(newMethodList);
+        StructType *newType=StructType::get(M->getContext(),ArrayRef<Type*>(newStructType));
+        Constant *newMethodStruct=ConstantStruct::get(newType,ArrayRef<Constant*>(newStructValue));//l_OBJC_$_CLASS_METHODS_
+        GlobalVariable *newMethodStructGV=new GlobalVariable(*M,newType,true, GlobalValue::LinkageTypes::PrivateLinkage,newMethodStruct);
+        Constant *bitcastExpr=ConstantExpr::getBitCast(newMethodStructGV,M->getTypeByName("struct.__method_list_t")->getPointerTo());
+        CS->handleOperandChange(CS->getAggregateElement(5),bitcastExpr);
+        methodListGV->eraseFromParent();//This won't work as we must clean-up llvm.compiler.used
 
         errs()<<"Updated ClassMethod Map of:"<<class_ro->getName()<<"\n";
       }
@@ -437,14 +435,22 @@ struct AntiClassDump : public ModulePass {
         Constant *newMethodList=ConstantArray::get(AT,ArrayRef<Constant*>(newMethod));//Container of objc_method_t
         StructType* oldGVType=cast<StructType>(methodListGV->getInitializer()->getType());
         vector<Type*> newStructType;
+        vector<Constant*> newStructValue;
         //I'm fully aware that it's consistent Int32 on all platforms
         //This is future-proof
         newStructType.push_back(oldGVType->getElementType(0));
+        newStructValue.push_back(methodListGV->getInitializer()->getAggregateElement(0u));
         newStructType.push_back(oldGVType->getElementType(1));
-        newStructType.push_back(ArrayType::get(objc_method_type,0));
+        newStructValue.push_back(methodListGV->getInitializer()->getAggregateElement(1u));
+        newStructType.push_back(AT);
+        newStructValue.push_back(newMethodList);
         //FIXME: Replace l_OBJC_$_CLASS_METHODS_ with minimum effort
-        Constant *newMethodStruct=ConstantStruct::get()//l_OBJC_$_CLASS_METHODS_
-
+        StructType *newType=StructType::get(M->getContext(),ArrayRef<Type*>(newStructType));
+        Constant *newMethodStruct=ConstantStruct::get(newType,ArrayRef<Constant*>(newStructValue));//l_OBJC_$_CLASS_METHODS_
+        GlobalVariable *newMethodStructGV=new GlobalVariable(*M,newType,true, GlobalValue::LinkageTypes::PrivateLinkage,newMethodStruct);
+        Constant *bitcastExpr=ConstantExpr::getBitCast(newMethodStructGV,M->getTypeByName("struct.__method_list_t")->getPointerTo());
+        CS->handleOperandChange(CS->getAggregateElement(5),bitcastExpr);
+        methodListGV->eraseFromParent();//This won't work as we must clean-up llvm.compiler.used
       }
     }
   } // handleClass
