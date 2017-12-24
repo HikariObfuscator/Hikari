@@ -12,7 +12,7 @@
   llvm/Transforms/Obfuscation/AntiClassDump.h THIN mode is used on per-module
   basis without LTO overhead and structs are left in the module where possible.
   This is particularly useful for cases where LTO is not possible. For example
-  static library Full mode is used at LTO stage, this mode constructs dependency
+  static library. Full mode is used at LTO stage, this mode constructs dependency
   graph and perform full wipe-out as well as llvm.global_ctors injection
 */
 
@@ -278,6 +278,7 @@ struct AntiClassDump : public ModulePass {
     errs() << "Handling Class:" << ClassName
            << " With SuperClass:" << SuperClassName << "\n";
     Module *M = BB->getModule();
+
     // Let's extract stuffs
     // struct _class_t {
     //   struct _class_t *isa;
@@ -393,10 +394,12 @@ struct AntiClassDump : public ModulePass {
         vector<Constant*> newStructValue;
         //I'm fully aware that it's consistent Int32 on all platforms
         //This is future-proof
+        //TODO: Fix method count
+
         newStructType.push_back(oldGVType->getElementType(0));
         newStructValue.push_back(methodListGV->getInitializer()->getAggregateElement(0u));
         newStructType.push_back(oldGVType->getElementType(1));
-        newStructValue.push_back(methodListGV->getInitializer()->getAggregateElement(1u));
+        newStructValue.push_back(ConstantInt::get(oldGVType->getElementType(1),0));
         newStructType.push_back(AT);
         newStructValue.push_back(newMethodList);
         StructType *newType=StructType::get(M->getContext(),ArrayRef<Type*>(newStructType));
@@ -404,9 +407,27 @@ struct AntiClassDump : public ModulePass {
         GlobalVariable *newMethodStructGV=new GlobalVariable(*M,newType,true, GlobalValue::LinkageTypes::PrivateLinkage,newMethodStruct);
         Constant *bitcastExpr=ConstantExpr::getBitCast(newMethodStructGV,M->getTypeByName("struct.__method_list_t")->getPointerTo());
         CS->handleOperandChange(CS->getAggregateElement(5),bitcastExpr);
-        methodListGV->eraseFromParent();//This won't work as we must clean-up llvm.compiler.used
-
-        errs()<<"Updated ClassMethod Map of:"<<class_ro->getName()<<"\n";
+        GlobalVariable* metadatacompilerusedGV=cast<GlobalVariable>(M->getGlobalVariable("llvm.compiler.used",true));
+        ConstantArray* metadatacompilerusedlist=cast<ConstantArray>(metadatacompilerusedGV->getInitializer());
+        ArrayType* oldmetadatatype=metadatacompilerusedlist->getType();
+        vector<Constant*> values;
+        for(unsigned i=0;i<metadatacompilerusedlist->getNumOperands();i++){
+          Constant* foo=metadatacompilerusedlist->getOperand(i)->stripPointerCasts();
+          if(foo!=methodListGV){
+            values.push_back(metadatacompilerusedlist->getOperand(i));
+          }
+        }
+        //values.push_back(ConstantExpr::getBitCast(newMethodStructGV,Type::getInt8PtrTy(M->getContext())));
+        ArrayType *newmetadatatype=ArrayType::get(oldmetadatatype->getElementType (),values.size());
+        Constant* newused=ConstantArray::get(newmetadatatype,ArrayRef<Constant*>(values));
+        metadatacompilerusedGV->dropAllReferences();
+        metadatacompilerusedGV->removeFromParent();
+        methodListGV->dropAllReferences();
+        methodListGV->eraseFromParent();
+        GlobalVariable* newIntializer=new GlobalVariable(*M,newmetadatatype,true,GlobalValue::LinkageTypes::AppendingLinkage,newused,"llvm.compiler.used");
+        newIntializer->copyAttributesFrom(metadatacompilerusedGV);
+        metadatacompilerusedGV->deleteValue();
+        errs()<<"Updated Instance Method Map of:"<<class_ro->getName()<<"\n";
       }
     }
     if (ConstantStruct *CS =
@@ -438,19 +459,39 @@ struct AntiClassDump : public ModulePass {
         vector<Constant*> newStructValue;
         //I'm fully aware that it's consistent Int32 on all platforms
         //This is future-proof
+        //TODO: Fix method count
         newStructType.push_back(oldGVType->getElementType(0));
         newStructValue.push_back(methodListGV->getInitializer()->getAggregateElement(0u));
         newStructType.push_back(oldGVType->getElementType(1));
-        newStructValue.push_back(methodListGV->getInitializer()->getAggregateElement(1u));
+        newStructValue.push_back(ConstantInt::get(oldGVType->getElementType(1),1));//this is class count
         newStructType.push_back(AT);
         newStructValue.push_back(newMethodList);
-        //FIXME: Replace l_OBJC_$_CLASS_METHODS_ with minimum effort
         StructType *newType=StructType::get(M->getContext(),ArrayRef<Type*>(newStructType));
         Constant *newMethodStruct=ConstantStruct::get(newType,ArrayRef<Constant*>(newStructValue));//l_OBJC_$_CLASS_METHODS_
         GlobalVariable *newMethodStructGV=new GlobalVariable(*M,newType,true, GlobalValue::LinkageTypes::PrivateLinkage,newMethodStruct);
         Constant *bitcastExpr=ConstantExpr::getBitCast(newMethodStructGV,M->getTypeByName("struct.__method_list_t")->getPointerTo());
         CS->handleOperandChange(CS->getAggregateElement(5),bitcastExpr);
-        methodListGV->eraseFromParent();//This won't work as we must clean-up llvm.compiler.used
+        GlobalVariable* metadatacompilerusedGV=cast<GlobalVariable>(M->getGlobalVariable("llvm.compiler.used",true));
+        ConstantArray* metadatacompilerusedlist=cast<ConstantArray>(metadatacompilerusedGV->getInitializer());
+        ArrayType* oldmetadatatype=metadatacompilerusedlist->getType();
+        vector<Constant*> values;
+        for(unsigned i=0;i<metadatacompilerusedlist->getNumOperands();i++){
+          Constant* foo=metadatacompilerusedlist->getOperand(i)->stripPointerCasts();
+          if(foo!=methodListGV){
+            values.push_back(metadatacompilerusedlist->getOperand(i));
+          }
+        }
+        //values.push_back(ConstantExpr::getBitCast(newMethodStructGV,Type::getInt8PtrTy(M->getContext())));
+        ArrayType *newmetadatatype=ArrayType::get(oldmetadatatype->getElementType (),values.size());
+        Constant* newused=ConstantArray::get(newmetadatatype,ArrayRef<Constant*>(values));
+        metadatacompilerusedGV->dropAllReferences();
+        metadatacompilerusedGV->removeFromParent();
+        methodListGV->dropAllReferences();
+        methodListGV->eraseFromParent();
+        GlobalVariable* newIntializer=new GlobalVariable(*M,newmetadatatype,true,GlobalValue::LinkageTypes::AppendingLinkage,newused,"llvm.compiler.used");
+        newIntializer->copyAttributesFrom(metadatacompilerusedGV);
+        metadatacompilerusedGV->deleteValue();
+        errs()<<"Updated Class Method Map of:"<<class_ro->getName()<<"\n";
       }
     }
   } // handleClass
@@ -564,7 +605,7 @@ struct AntiClassDump : public ModulePass {
     // GlobalVariable
     if (ivar_list != NULL) {
       GlobalVariable *GV = dyn_cast<GlobalVariable>(
-          ivar_list->getOperand(0)); // Equal to casted stripPointerCasts()
+          ivar_list->getOperand(0)); // Equal to casted stripPointerCasts()n
       assert(GV && "_OBJC_$_INSTANCE_VARIABLES Missing");
       assert(GV->hasInitializer() &&
              "_OBJC_$_INSTANCE_VARIABLES Missing Initializer");
