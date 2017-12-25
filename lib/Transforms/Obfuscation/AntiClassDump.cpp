@@ -403,6 +403,7 @@ struct AntiClassDump : public ModulePass {
         StructType *newType=StructType::get(M->getContext(),ArrayRef<Type*>(newStructType));
         Constant *newMethodStruct=ConstantStruct::get(newType,ArrayRef<Constant*>(newStructValue));//l_OBJC_$_CLASS_METHODS_
         GlobalVariable *newMethodStructGV=new GlobalVariable(*M,newType,true, GlobalValue::LinkageTypes::PrivateLinkage,newMethodStruct);
+        newMethodStructGV->copyAttributesFrom(methodListGV);
         Constant *bitcastExpr=ConstantExpr::getBitCast(newMethodStructGV,M->getTypeByName("struct.__method_list_t")->getPointerTo());
         CS->handleOperandChange(CS->getAggregateElement(5),bitcastExpr);
         GlobalVariable* metadatacompilerusedGV=cast<GlobalVariable>(M->getGlobalVariable("llvm.compiler.used",true));
@@ -466,6 +467,7 @@ struct AntiClassDump : public ModulePass {
         StructType *newType=StructType::get(M->getContext(),ArrayRef<Type*>(newStructType));
         Constant *newMethodStruct=ConstantStruct::get(newType,ArrayRef<Constant*>(newStructValue));//l_OBJC_$_CLASS_METHODS_
         GlobalVariable *newMethodStructGV=new GlobalVariable(*M,newType,true, GlobalValue::LinkageTypes::PrivateLinkage,newMethodStruct);
+        newMethodStructGV->copyAttributesFrom(methodListGV);
         Constant *bitcastExpr=ConstantExpr::getBitCast(newMethodStructGV,M->getTypeByName("struct.__method_list_t")->getPointerTo());
         CS->handleOperandChange(CS->getAggregateElement(5),bitcastExpr);
         GlobalVariable* metadatacompilerusedGV=cast<GlobalVariable>(M->getGlobalVariable("llvm.compiler.used",true));
