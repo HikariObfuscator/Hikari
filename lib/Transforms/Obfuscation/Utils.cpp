@@ -98,37 +98,10 @@ std::string readAnnotate(Function *f) {
 }
 
 bool toObfuscate(bool flag, Function *f, std::string attribute) {
-  std::string attr = attribute;
-  std::string attrNo = "no" + attr;
 
-  // Check if declaration
-  if (f->isDeclaration()) {
-    return false;
-  }
+  // FIXME: IIRC Clang's CGObjCMac.cpp doesn't support inserting annotations for ObjC Code
+  //That's exactly why O-LLVM's annotations Doesn't work on ObjC classes/methods
+  //We just force return true here.Unless someone is willing to fix CFE properly
 
-  // Check external linkage
-  if(f->hasAvailableExternallyLinkage() != 0) {
-    return false;
-  }
-  // If fla flag is set
-  if (flag == true) {
-    /* Check if the number of applications is correct
-    if (!((Percentage > 0) && (Percentage <= 100))) {
-      LLVMContext &ctx = llvm::getGlobalContext();
-      ctx.emitError(Twine("Flattening application function\
-              percentage -perFLA=x must be 0 < x <= 100"));
-    }
-    // Check name
-    else if (func.size() != 0 && func.find(f->getName()) != std::string::npos) {
-      return true;
-    }
-
-    if ((((int)llvm::cryptoutils->get_range(100))) < Percentage) {
-      return true;
-    }
-    */
-    return true;
-  }
-
-  return false;
+  return true;
 }
