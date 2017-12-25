@@ -9,6 +9,7 @@ add_llvm_library(LLVMObfuscation
   SplitBasicBlocks.cpp
   AntiDebugging.cpp
   AntiClassDump.cpp
+  tinyexpr.c
   DEPENDS
   intrinsics_gen
   )
