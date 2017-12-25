@@ -137,13 +137,14 @@ namespace {
 		return false;
       }
       // If fla annotations
-      if(toObfuscate(flag,&F,"bcf")) {
+      // FIXME: Clang's CGObjCMac.cpp doesn't support inserting annotations for ObjC Code
+      //if(toObfuscate(flag,&F,"bcf")) {
         bogus(F);
         doF(*F.getParent());
         return true;
-      }
+      //}
 
-      return false;
+      //return false;
     } // end of runOnFunction()
 
     void bogus(Function &F) {

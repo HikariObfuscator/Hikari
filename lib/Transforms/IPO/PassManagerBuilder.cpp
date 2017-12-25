@@ -931,7 +931,8 @@ void PassManagerBuilder::populateThinLTOPassManager(
 
 void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
     addSymbolObfPass(PM);
-    addAntiClassDumpPass(PM,ACDMode::FULL);
+    //FIXME: Implement Stage 2
+    //addAntiClassDumpPass(PM,ACDMode::FULL);
   if (LibraryInfo)
     PM.add(new TargetLibraryInfoWrapperPass(*LibraryInfo));
 

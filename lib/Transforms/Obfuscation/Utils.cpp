@@ -110,19 +110,6 @@ bool toObfuscate(bool flag, Function *f, std::string attribute) {
   if(f->hasAvailableExternallyLinkage() != 0) {
     return false;
   }
-
-  // We have to check the nofla flag first
-  // Because .find("fla") is true for a string like "fla" or
-  // "nofla"
-  if (readAnnotate(f).find(attrNo) != std::string::npos) {
-    return false;
-  }
-
-  // If fla annotations
-  if (readAnnotate(f).find(attr) != std::string::npos) {
-    return true;
-  }
-
   // If fla flag is set
   if (flag == true) {
     /* Check if the number of applications is correct
@@ -145,4 +132,3 @@ bool toObfuscate(bool flag, Function *f, std::string attribute) {
 
   return false;
 }
-
