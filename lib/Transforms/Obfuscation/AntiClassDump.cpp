@@ -39,7 +39,7 @@ using namespace std;
 static cl::opt<bool>
     EnableAntiClassDump("enable-acd", cl::init(false), cl::NotHidden,
                         cl::desc("Enable Anti class-dump.Use with LTO"));
-static cl::opt<bool> UseInitialize("acd-use-initialize", cl::init(false), cl::NotHidden,
+static cl::opt<bool> UseInitialize("acd-use-initialize", cl::init(true), cl::NotHidden,
                                                 cl::desc("Inject codes to +initialize"));
 namespace llvm {
 struct AntiClassDump : public ModulePass {
