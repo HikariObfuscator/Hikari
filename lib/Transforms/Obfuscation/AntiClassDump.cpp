@@ -445,7 +445,18 @@ struct AntiClassDump : public ModulePass {
         //See http://llvm.org/viewvc/llvm-project/cfe/trunk/lib/AST/ASTContext.cpp?revision=320954&view=markup
         //ASTContext::getObjCEncodingForMethodDecl
         //The one hard-coded here is generated for macOS 64Bit
-        Constant *MethType=cast<Constant>(IRB->CreateGlobalStringPtr("v16@0:8"));
+        Triple tri=Triple(M->getTargetTriple());
+        Constant *MethType=NULL;
+        if(tri.isOSDarwin () && tri.isArch64Bit()){
+          MethType=cast<Constant>(IRB->CreateGlobalStringPtr("v16@0:8"));
+        }
+        else if(tri.isOSDarwin () && tri.isArch32Bit()){
+          MethType=cast<Constant>(IRB->CreateGlobalStringPtr("v8@0:4"));
+        }
+        else{
+          errs()<<"Unknown Platform.Blindly applying method signature for macOS 64Bit\n";
+          MethType=cast<Constant>(IRB->CreateGlobalStringPtr("v16@0:8"));
+        }
         Constant *BitCastedIMP=cast<Constant>(IRB->CreateBitCast(IRB->GetInsertBlock()->getParent(),objc_getClass->getFunctionType()->getParamType(0)));
         vector<Constant*> methodStructContents;//{GEP(NAME),GEP(TYPE),IMP}
         methodStructContents.push_back(MethName);
@@ -480,7 +491,6 @@ struct AntiClassDump : public ModulePass {
             values.push_back(metadatacompilerusedlist->getOperand(i));
           }
         }
-        //values.push_back(ConstantExpr::getBitCast(newMethodStructGV,Type::getInt8PtrTy(M->getContext())));
         ArrayType *newmetadatatype=ArrayType::get(oldmetadatatype->getElementType (),values.size());
         Constant* newused=ConstantArray::get(newmetadatatype,ArrayRef<Constant*>(values));
         metadatacompilerusedGV->dropAllReferences();
