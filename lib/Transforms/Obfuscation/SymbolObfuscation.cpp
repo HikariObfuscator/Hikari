@@ -27,6 +27,7 @@ namespace llvm{
   struct SymbolObfuscation : public ModulePass {
     static char ID;
     SymbolObfuscation() : ModulePass(ID) {}
+    StringRef getPassName()const override{return StringRef("SymbolObfuscation");}
     string randomString(int length){
       string name;
       name.resize(length);

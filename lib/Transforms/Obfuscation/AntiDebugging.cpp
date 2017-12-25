@@ -28,6 +28,7 @@ namespace llvm{
   struct AntiDebugging : public FunctionPass {
     static char ID;
     AntiDebugging() : FunctionPass(ID) {}
+    StringRef getPassName()const override{return StringRef("AntiDebugging");}
     bool runOnFunction(Function &F) override {
       BasicBlock *EntryBlock = &(F.getEntryBlock());
       IRBuilder<> IRB(EntryBlock, EntryBlock->getFirstInsertionPt());

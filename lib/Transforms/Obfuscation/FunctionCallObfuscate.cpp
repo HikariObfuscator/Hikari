@@ -40,6 +40,7 @@ struct FunctionCallObfuscate : public FunctionPass {
   static char ID;
   json Configuration;
   FunctionCallObfuscate() : FunctionPass(ID) {}
+  StringRef getPassName()const override{return StringRef("FunctionCallObfuscate");}
   bool doInitialization(Module &M) override {
     if (SymbolConfigPath == "+-x/") {
       SmallString<32> Path;

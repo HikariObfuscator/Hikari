@@ -54,6 +54,7 @@ struct AntiClassDump : public ModulePass {
   static char ID;
   ACDMode flag;
   AntiClassDump(ACDMode flag) : ModulePass(ID) { this->flag = flag; }
+  StringRef getPassName() const override{return StringRef("AntiClassDump");}
   virtual bool doInitialization(Module &M) override {
     // Basic Defs
     Triple tri(M.getTargetTriple());
@@ -147,6 +148,11 @@ struct AntiClassDump : public ModulePass {
   }
   bool runOnModule(Module &M) override {
     GlobalVariable *OLCGV = M.getGlobalVariable("OBJC_LABEL_CLASS_$", true);
+    if(OLCGV==NULL){
+      errs()<<"No ObjC Class Found in :"<<M.getSourceFileName ()<<"\n";
+      //No ObjC class found.
+      return false;
+    }
     // Create our own Initializer
     FunctionType *InitializerType = FunctionType::get(
         Type::getVoidTy(M.getContext()), ArrayRef<Type *>(), false);
@@ -156,7 +162,6 @@ struct AntiClassDump : public ModulePass {
     //
     IRBuilder <> IRB(EntryBB);
     IRB.CreateRetVoid();
-    assert(OLCGV != NULL && "OBJC_LABEL_CLASS_$ Missing.");
     assert(OLCGV->hasInitializer() &&
            "OBJC_LABEL_CLASS_$ Doesn't Have Initializer.");
     ConstantArray *OBJC_LABEL_CLASS_CDS =
@@ -381,14 +386,17 @@ struct AntiClassDump : public ModulePass {
     // FIXME:FULL MODE Wiping unimplemented
     // Now Metadata is available in Runtime.
     // Add Methods
-    if (ConstantStruct *CS = cast<ConstantStruct>(class_ro->getInitializer())) {
+    ConstantStruct *metaclassCS = cast<ConstantStruct>(class_ro->getInitializer());
+    ConstantStruct *classCS = cast<ConstantStruct>(metaclass_ro->getInitializer());
+    if (!metaclassCS->getAggregateElement(5)->isNullValue ()) {
       errs()<<"Handling Instance Methods For Class:"<<ClassName<<"\n";
-      HandleMethods(CS, IRB, M, Class, false);
+      HandleMethods(metaclassCS, IRB, M, Class, false);
       if(flag == ACDMode::THIN){
+        errs()<<"Updating Class Method Map For Class:"<<ClassName<<"\n";
         Type* objc_method_type=M->getTypeByName("struct._objc_method");
         ArrayType *AT=ArrayType::get(objc_method_type,0);
         Constant *newMethodList=ConstantArray::get(AT,ArrayRef<Constant*>());
-        GlobalVariable *methodListGV=cast<GlobalVariable>(CS->getAggregateElement(5)->getOperand(0));//is striped MethodListGV
+        GlobalVariable *methodListGV=cast<GlobalVariable>(metaclassCS->getAggregateElement(5)->getOperand(0));//is striped MethodListGV
         StructType* oldGVType=cast<StructType>(methodListGV->getInitializer()->getType());
         vector<Type*> newStructType;
         vector<Constant*> newStructValue;
@@ -405,7 +413,7 @@ struct AntiClassDump : public ModulePass {
         GlobalVariable *newMethodStructGV=new GlobalVariable(*M,newType,true, GlobalValue::LinkageTypes::PrivateLinkage,newMethodStruct);
         newMethodStructGV->copyAttributesFrom(methodListGV);
         Constant *bitcastExpr=ConstantExpr::getBitCast(newMethodStructGV,M->getTypeByName("struct.__method_list_t")->getPointerTo());
-        CS->handleOperandChange(CS->getAggregateElement(5),bitcastExpr);
+        metaclassCS->handleOperandChange(metaclassCS->getAggregateElement(5),bitcastExpr);
         GlobalVariable* metadatacompilerusedGV=cast<GlobalVariable>(M->getGlobalVariable("llvm.compiler.used",true));
         ConstantArray* metadatacompilerusedlist=cast<ConstantArray>(metadatacompilerusedGV->getInitializer());
         ArrayType* oldmetadatatype=metadatacompilerusedlist->getType();
@@ -429,15 +437,15 @@ struct AntiClassDump : public ModulePass {
         errs()<<"Updated Instance Method Map of:"<<class_ro->getName()<<"\n";
       }
     }
-    if (ConstantStruct *CS =
-            cast<ConstantStruct>(metaclass_ro->getInitializer())) {
+    if (!classCS->getAggregateElement(5)->isNullValue ()) {
       errs()<<"Handling Class Methods For Class:"<<ClassName<<"\n";
-      HandleMethods(CS, IRB, M, Class, true);
+      HandleMethods(classCS, IRB, M, Class, true);
       if(flag == ACDMode::THIN){
+        errs()<<"Updating Class Method Map For Class:"<<ClassName<<"\n";
         //MethodList has index of 5
         //We need to create a new type first then bitcast to required type later
         //Since the original type's contained arraytype has count of 0
-        GlobalVariable *methodListGV=cast<GlobalVariable>(CS->getAggregateElement(5)->getOperand(0));//is striped MethodListGV
+        GlobalVariable *methodListGV=cast<GlobalVariable>(classCS->getAggregateElement(5)->getOperand(0));//is striped MethodListGV
         Type* objc_method_type=M->getTypeByName("struct._objc_method");
         ArrayType *AT=ArrayType::get(objc_method_type,1);
         Constant* MethName=cast<Constant>(IRB->CreateGlobalStringPtr("initialize"));
@@ -480,7 +488,7 @@ struct AntiClassDump : public ModulePass {
         GlobalVariable *newMethodStructGV=new GlobalVariable(*M,newType,true, GlobalValue::LinkageTypes::PrivateLinkage,newMethodStruct);
         newMethodStructGV->copyAttributesFrom(methodListGV);
         Constant *bitcastExpr=ConstantExpr::getBitCast(newMethodStructGV,M->getTypeByName("struct.__method_list_t")->getPointerTo());
-        CS->handleOperandChange(CS->getAggregateElement(5),bitcastExpr);
+        classCS->handleOperandChange(classCS->getAggregateElement(5),bitcastExpr);
         GlobalVariable* metadatacompilerusedGV=cast<GlobalVariable>(M->getGlobalVariable("llvm.compiler.used",true));
         ConstantArray* metadatacompilerusedlist=cast<ConstantArray>(metadatacompilerusedGV->getInitializer());
         ArrayType* oldmetadatatype=metadatacompilerusedlist->getType();
