@@ -4,7 +4,8 @@ Hikari is a port of Obfuscator-LLVM with a few custom built passes.
 
 For macOS,Download from Releases page,Extract Hikari.xctoolchain to ``~/Library/Developer/``.  Note that I do not personally use Xcode as such I'm not able to help with issues regarding Xcode Intergration  
 
-For other platforms, compile and install accordingly. See [BuildScript](https://gist.github.com/Naville/f1d8ea43ffde61f57497492d599b32fb)
+For other platforms, compile and install accordingly. See [BuildScript](https://gist.github.com/Naville/f1d8ea43ffde61f57497492d599b32fb)  
+
 Note that this repo currently contains only the LLVM Core, see [Getting Started with the LLVM System](http://llvm.org/docs/GettingStarted.html) for installing other components like Clang
 
 Note that C++11 is required
@@ -20,10 +21,13 @@ enable-splitobf Enable BasicBlockSpliting
 enable-subobf Enable Instruction Substitution  
 enable-allobf Enable All Non-LTO Obfuscation  
 enable-adb Enable AntiDebugging Mechanisms
+enable-acd Enable ClassDump Mechanisms
 ```
 An example of invoking everything from command line would be:    
 ``/PATH/TO/OUR/clang -mllvm -enable-allobf -Xlinker -mllvm -Xlinker -enable-fco main.m -flto``  
 For Xcode, add something like ``-Wl,-mllvm,-enable-fco`` to ``Other linker flags``
+
+
 
 # TODO
 - StringEncryption
@@ -32,9 +36,13 @@ For Xcode, add something like ``-Wl,-mllvm,-enable-fco`` to ``Other linker flags
 - Complete Anti-Debuging
 
 ## Pass Options
+
+### AntiClassDump
+  Pass ``-enable-acd`` to enable stage 1 AntiClassDump. Note that while stage 2 pass is registered in LTO, it's not even remotely usable yet,so doing so at LTO will results in undefined behavior
+
 ### FunctionCallObfuscate
   Pass ``-enable-fco`` to enable.FCO uses a json configuration to resolve symbols.For example ``{"AAAA":"BBBB"}`` means the pass should replace a call to function ``AAAA`` with a call to the result of ``dlsym(RTLD_DEFAULT,"BBBB")``
-  
+
   By default configuration is loaded from ``~/Hikari/SymbolConfig.json``
   Pass ``fcoconfig=PATH`` to override
 ## Intergrating with Xcode
