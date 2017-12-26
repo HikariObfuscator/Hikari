@@ -3,6 +3,7 @@
  *  https://github.com/Naville
  *  GPL V3 Licensed
  */
+#include "llvm/Transforms/Obfuscation/StringEncryption.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
@@ -14,7 +15,7 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include "llvm/Transforms/Obfuscation/StringEncryption.h"
+#include "llvm/Transforms/Obfuscation/CryptoUtils.h"
 #include <cstdlib>
 #include <iostream>
 #include <set>
@@ -29,14 +30,14 @@ struct StringEncryption : public ModulePass {
     return StringRef("StringEncryption");
   }
   bool runOnModule(Module &M) override {
-    srand(time(NULL));
     set<GlobalVariable *> cstrings;
     set<GlobalVariable *> objcstrings;
     // Collect GVs
     for (auto g = M.global_begin(); g != M.global_end(); g++) {
       GlobalVariable *GV = &(*g);
       if (GV->hasInitializer() &&
-          GV->getType()->getElementType() == M.getTypeByName("struct.__NSConstantString_tag")) {
+          GV->getType()->getElementType() ==
+              M.getTypeByName("struct.__NSConstantString_tag")) {
         objcstrings.insert(GV);
         continue;
       }
@@ -45,22 +46,21 @@ struct StringEncryption : public ModulePass {
           GV->getSection() != StringRef("llvm.metadata") &&
           GV->getSection().find(StringRef("__objc")) == string::npos) {
         // isString() asssumes the array has type i8, which should hold on all
-        // major platforms  We don't care about some custom os written by 8yo Bob
-        // that uses arbitrary ABI
+        // major platforms  We don't care about some custom os written by 8yo
+        // Bob that uses arbitrary ABI
         if (ConstantDataSequential *CDS =
                 dyn_cast<ConstantDataSequential>(GV->getInitializer())) {
-                  if(
-                  CDS->isString()){
-                    cstrings.insert(GV);
-                  }
+          if (CDS->isString()) {
+            cstrings.insert(GV);
+          }
         }
       }
     }
     // FIXME: Correctly Handle ObjC String Constants
-    // Probablt recreate at runtime and replace pointers?
+    // Probably recreate at runtime and replace pointers?
     for (GlobalVariable *GV : objcstrings) {
       //@_unnamed_cfstring_ = private global %struct.__NSConstantString_tag {
-      //i32* getelementptr inbounds ([0 x i32], [0 x i32]*
+      // i32* getelementptr inbounds ([0 x i32], [0 x i32]*
       //@__CFConstantStringClassReference, i32 0, i32 0),  i32 1992, i8*
       // getelementptr inbounds ([2 x i8], [2 x i8]* @.str, i32 0, i32 0), i64 1
       // },  section "__DATA,__cfstring", align 8
@@ -80,8 +80,9 @@ struct StringEncryption : public ModulePass {
     vector<uint8_t> stringvals;
     vector<uint8_t> keys;
     for (unsigned i = 0; i < CDS->getNumElements(); i++) {
-      uint8_t key = rand() % 256; // Random number in 0~255. which covers all
-                                  // possible value of a uint8_t
+      uint8_t key = cryptoutils->get_uint8_t(); // Random number in 0~255. which
+                                                // covers all possible value of
+                                                // a uint8_t
       keys.push_back(key);
       uint8_t str = CDS->getElementAsInteger(i) ^ key;
       stringvals.push_back(str);
@@ -111,7 +112,7 @@ struct StringEncryption : public ModulePass {
     return true;
   }
 };
-Pass* createStringEncryptionPass() { return new StringEncryption(); }
+Pass *createStringEncryptionPass() { return new StringEncryption(); }
 } // namespace llvm
 
 char StringEncryption::ID = 0;
