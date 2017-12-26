@@ -20,6 +20,14 @@
 #include <iostream>
 #include <set>
 #include <string>
+/*
+  Unlike Armariris which inject decrytion code at llvm.global_ctors.
+  We try to find the containing Function of Users referencing our string GV.
+  Then we search for terminators.
+  We insert decryption code at begining or the function and encrypt it back at terminators
+
+  For Users where we cant find a Function, we then inject decryption codes at runtime
+*/
 using namespace llvm;
 using namespace std;
 namespace llvm {
@@ -30,23 +38,23 @@ struct StringEncryption : public ModulePass {
     return StringRef("StringEncryption");
   }
   bool runOnModule(Module &M) override {
+    //FunctionType* decryptorType=FunctionType::get(Type::getVoidTy(M.getContext()),false);
+    //Function* decryptor=Function::Create(decryptorType,GlobalValue::LinkageTypes::PrivateLinkage,"Decryptor",&M);
     set<GlobalVariable *> cstrings;
     set<GlobalVariable *> objcstrings;
     // Collect GVs
     for (auto g = M.global_begin(); g != M.global_end(); g++) {
       GlobalVariable *GV = &(*g);
+      if (GV->hasInitializer()&&GV->getType()->getElementType() ==
+              M.getTypeByName("struct.__NSConstantString_tag")) {
+        objcstrings.insert(GV);
+        continue;
+      }
       // We only handle NonMetadata&&NonObjC&&LocalInitialized&&CDS
       if (GV->hasInitializer() && GV->isConstant() &&
           GV->getSection() != StringRef("llvm.metadata") &&
           GV->getSection().find(StringRef("__objc")) == string::npos &&
           GV->getName().find("OBJC") == string::npos) {
-
-        if (GV->hasInitializer() &&
-            GV->getType()->getElementType() ==
-                M.getTypeByName("struct.__NSConstantString_tag")) {
-          objcstrings.insert(GV);
-          continue;
-        }
         // isString() asssumes the array has type i8, which should hold on all
         // major platforms  We don't care about some custom os written by 8yo
         // Bob that uses arbitrary ABI
@@ -73,21 +81,26 @@ struct StringEncryption : public ModulePass {
       cstrings.erase(referencedGV);
     }
     for (GlobalVariable *GV : cstrings) {
-      HandleString(GV);
+      //errs()<<"Found C-StyleString\n";
+      //GV->dump();
+      HandleCString(GV);
+    }
+    for (GlobalVariable *GV : objcstrings) {
+      //errs()<<"Found Objective-C-StyleString\n";
+      //GV->dump();
+      //HandleString(GV);
     }
     // TODO:Do post-run clean up
     return false;
   } // End runOnModule
-  bool HandleString(GlobalVariable *GV) {
+  bool HandleCString(GlobalVariable *GV) {
     ConstantDataSequential *CDS =
         dyn_cast<ConstantDataSequential>(GV->getInitializer());
-
+    assert(CDS && "GlobalVariable Passed in doesn't have ConstantDataSequential Initializer!");
     vector<uint8_t> stringvals;
     vector<uint8_t> keys;
     for (unsigned i = 0; i < CDS->getNumElements(); i++) {
-      uint8_t key = cryptoutils->get_uint8_t(); // Random number in 0~255. which
-                                                // covers all possible value of
-                                                // a uint8_t
+      uint8_t key = cryptoutils->get_uint8_t();
       keys.push_back(key);
       uint8_t str = CDS->getElementAsInteger(i) ^ key;
       stringvals.push_back(str);
@@ -105,17 +118,32 @@ struct StringEncryption : public ModulePass {
         GV->getName() + "Keys", nullptr, GV->getThreadLocalMode(),
         GV->getType()->getAddressSpace());
     EncryptedGV->copyAttributesFrom(GV);
-    GV->replaceAllUsesWith(EncryptedGV);
-    GV->eraseFromParent();
-    // TODO: Visit Instructions refering here and and decode functions
-    for (User *U : EncryptedGV->users()) {
-      /*if (Instruction *Inst = dyn_cast<Instruction>(U)) {
-        errs() << "F is used in instruction:\n";
-        errs() << *Inst << "\n";
-      }*/
-      U->dump();
-    }
+    addDecryption(GV,EncryptedGV,KeyGV);
+    //Let's do this in addDecryption
+    //GV->replaceAllUsesWith(EncryptedGV);
+    //GV->eraseFromParent();
     return true;
+  }//End of Handle CString
+
+  /*
+  We assume that the originalGV is only references from functions
+  And all references of the GV is within one function
+  */
+  void addDecryption(GlobalVariable *origGV,GlobalVariable* enc,GlobalVariable* key){
+    for (User *U : origGV->users()) {
+      if (Instruction *Inst = dyn_cast<Instruction>(U)) {
+        errs()<<"Found Instruction Usage of String GV\n";
+        //Inst->dump();
+      }
+      else if(ConstantExpr* CE=dyn_cast<ConstantExpr>(U)){
+        errs()<<"Found ConstantExpr Usage of String GV\n";
+        //CE->dump();
+      }
+      else{
+        errs()<<"Unknown Reference To String GV\n";
+        //U->dump();
+      }
+    }
   }
 };
 Pass *createStringEncryptionPass() { return new StringEncryption(); }
