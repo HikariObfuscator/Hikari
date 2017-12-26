@@ -35,16 +35,18 @@ struct StringEncryption : public ModulePass {
     // Collect GVs
     for (auto g = M.global_begin(); g != M.global_end(); g++) {
       GlobalVariable *GV = &(*g);
-      if (GV->hasInitializer() &&
-          GV->getType()->getElementType() ==
-              M.getTypeByName("struct.__NSConstantString_tag")) {
-        objcstrings.insert(GV);
-        continue;
-      }
       // We only handle NonMetadata&&NonObjC&&LocalInitialized&&CDS
       if (GV->hasInitializer() && GV->isConstant() &&
           GV->getSection() != StringRef("llvm.metadata") &&
-          GV->getSection().find(StringRef("__objc")) == string::npos) {
+          GV->getSection().find(StringRef("__objc")) == string::npos &&
+          GV->getName().find("OBJC") == string::npos) {
+
+        if (GV->hasInitializer() &&
+            GV->getType()->getElementType() ==
+                M.getTypeByName("struct.__NSConstantString_tag")) {
+          objcstrings.insert(GV);
+          continue;
+        }
         // isString() asssumes the array has type i8, which should hold on all
         // major platforms  We don't care about some custom os written by 8yo
         // Bob that uses arbitrary ABI
@@ -69,6 +71,9 @@ struct StringEncryption : public ModulePass {
       GlobalVariable *referencedGV =
           dyn_cast<GlobalVariable>(CE->getOperand(0));
       cstrings.erase(referencedGV);
+    }
+    for (GlobalVariable *GV : cstrings) {
+      HandleString(GV);
     }
     // TODO:Do post-run clean up
     return false;
@@ -104,10 +109,11 @@ struct StringEncryption : public ModulePass {
     GV->eraseFromParent();
     // TODO: Visit Instructions refering here and and decode functions
     for (User *U : EncryptedGV->users()) {
-      if (Instruction *Inst = dyn_cast<Instruction>(U)) {
+      /*if (Instruction *Inst = dyn_cast<Instruction>(U)) {
         errs() << "F is used in instruction:\n";
         errs() << *Inst << "\n";
-      }
+      }*/
+      U->dump();
     }
     return true;
   }
