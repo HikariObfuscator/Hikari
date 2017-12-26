@@ -47,6 +47,7 @@
 #include "llvm/Transforms/Obfuscation/Split.h"
 #include "llvm/Transforms/Obfuscation/AntiDebugging.h"
 #include "llvm/Transforms/Obfuscation/AntiClassDump.h"
+#include "llvm/Transforms/Obfuscation/StringEncryption.h"
 using namespace llvm;
 
 static cl::opt<bool>
@@ -161,6 +162,9 @@ static cl::opt<bool> EnableAntiDebugging("enable-adb",cl::init(false),cl::NotHid
 static cl::opt<bool> EnableFunctionCallObfuscate(
     "enable-fco", cl::init(false), cl::NotHidden,
     cl::desc("Enable Function CallSite Obfuscation."));
+static cl::opt<bool> EnableStringEncryption(
+        "enable-strcry", cl::init(false), cl::NotHidden,
+        cl::desc("Enable Function CallSite Obfuscation."));
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
     SizeLevel = 0;
@@ -433,6 +437,9 @@ void PassManagerBuilder::populateModulePassManager(
   addAntiClassDumpPass(MPM,ACDMode::THIN);
   if(EnableFunctionCallObfuscate||EnableObfuscation){
     MPM.add(createFunctionCallObfuscatePass());
+  }
+  if(EnableStringEncryption||EnableObfuscation){
+    MPM.add(createStringEncryptionPass());
   }
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.
