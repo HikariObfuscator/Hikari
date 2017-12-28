@@ -143,7 +143,7 @@ namespace {
         return true;
       }
 
-      //return false;
+      return false;
     } // end of runOnFunction()
 
     void bogus(Function &F) {
@@ -179,7 +179,10 @@ namespace {
           // Put all the function's block in a list
           std::list<BasicBlock *> basicBlocks;
           for (Function::iterator i=F.begin();i!=F.end();++i) {
-            basicBlocks.push_back(&*i);
+            BasicBlock *BB=&*i;
+            if(!BB->isEHPad() && !BB->isLandingPad()){
+                basicBlocks.push_back(BB);
+            }
           }
           DEBUG_WITH_TYPE("gen", errs() << "bcf: Iterating on the Function's Basic Blocks\n");
 
