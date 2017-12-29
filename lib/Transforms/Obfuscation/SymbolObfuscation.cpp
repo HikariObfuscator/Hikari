@@ -61,6 +61,7 @@ namespace llvm{
       PM.add(new SymbolObfuscation());
     }
   }
+  static RegisterPass<SymbolObfuscation> X("symobf", "SymbolObfuscation");
 }
 
 char SymbolObfuscation::ID = 0;

@@ -59,6 +59,7 @@ namespace llvm{
   Pass* createAntiDebuggingPass(){
     return new AntiDebugging();
   }
+  static RegisterPass<AntiDebugging> X("antidbg", "Anti Debugging");
 }
 
 char AntiDebugging::ID = 0;

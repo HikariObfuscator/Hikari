@@ -48,6 +48,7 @@
 #include "llvm/Transforms/Obfuscation/AntiDebugging.h"
 #include "llvm/Transforms/Obfuscation/AntiClassDump.h"
 #include "llvm/Transforms/Obfuscation/StringEncryption.h"
+#include "llvm/Transforms/Obfuscation/IndirectBranch.h"
 using namespace llvm;
 
 static cl::opt<bool>
@@ -165,6 +166,7 @@ static cl::opt<bool> EnableFunctionCallObfuscate(
 static cl::opt<bool> EnableStringEncryption(
         "enable-strcry", cl::init(false), cl::NotHidden,
         cl::desc("Enable Function CallSite Obfuscation."));
+static cl::opt<bool> EnableIndirectBranching("enable-indbra",cl::init(false),cl::NotHidden,cl::desc("Enable IndirectBranching."));
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
     SizeLevel = 0;
@@ -437,6 +439,9 @@ void PassManagerBuilder::populateModulePassManager(
   addAntiClassDumpPass(MPM,ACDMode::THIN);
   if(EnableFunctionCallObfuscate||EnableObfuscation){
     MPM.add(createFunctionCallObfuscatePass());
+  }
+  if(EnableIndirectBranching||EnableObfuscation){
+    MPM.add(createIndirectBranchPass());
   }
   if(EnableStringEncryption||EnableObfuscation){
     MPM.add(createStringEncryptionPass());

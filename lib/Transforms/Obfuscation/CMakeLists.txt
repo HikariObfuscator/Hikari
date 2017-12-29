@@ -11,6 +11,7 @@ add_llvm_library(LLVMObfuscation
   AntiClassDump.cpp
   StringEncryption.cpp
   tinyexpr.c
+  IndirectBranch.cpp
   DEPENDS
   intrinsics_gen
   )

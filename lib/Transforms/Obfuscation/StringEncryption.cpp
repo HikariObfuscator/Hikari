@@ -150,3 +150,4 @@ Pass *createStringEncryptionPass() { return new StringEncryption(); }
 } // namespace llvm
 
 char StringEncryption::ID = 0;
+static RegisterPass<StringEncryption> X("strenc", "StringEncryption");

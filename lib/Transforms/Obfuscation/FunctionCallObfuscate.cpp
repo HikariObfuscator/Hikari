@@ -204,5 +204,6 @@ struct FunctionCallObfuscate : public FunctionPass {
   }
 };
 Pass *createFunctionCallObfuscatePass() { return new FunctionCallObfuscate(); }
+static RegisterPass<FunctionCallObfuscate> X("fco", "Function Call Obfuscation");
 } // namespace llvm
 char FunctionCallObfuscate::ID = 0;
