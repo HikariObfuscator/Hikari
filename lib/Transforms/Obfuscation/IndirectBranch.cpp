@@ -38,9 +38,11 @@ namespace llvm{
               successor->setName(Twine("IndirectBranchingTarget"));
             }
             IRBuilder<> IRB(BI);
-            IndirectBrInst* IBI=IRB.CreateIndirectBr(BlockAddress::get(successor));
+            BlockAddress* BA=BlockAddress::get(successor);
+            IndirectBrInst* IBI=IRB.CreateIndirectBr(BA);
             BI->replaceAllUsesWith(IBI);
             IBI->addDestination (successor);
+
             //BI->eraseFromParent(); WTF why this would crash
           }
         }

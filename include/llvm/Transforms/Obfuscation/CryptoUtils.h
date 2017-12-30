@@ -220,6 +220,8 @@ public:
 
   // Returns a uniformly distributed 8-bit value
   uint8_t get_uint8_t();
+  // Returns a uniformly distributed 16-bit value
+  uint16_t get_uint16_t();
   // Returns a uniformly distributed 32-bit value
   uint32_t get_uint32_t();
   // Returns an integer uniformly distributed on [0, max[
@@ -261,4 +263,3 @@ private:
 }
 
 #endif // LLVM_CryptoUtils_H
-
