@@ -32,11 +32,8 @@
   ctors
 */
 /*
-Status: Currently we only handle C-Style strings passed in directly.
-We don't support global strings or ObjC strings.
-But adding corresponding support should be as easy as some kind of type check
-
-
+Status: Currently we only handle strings passed in directly.
+GV strings are not properly handled
 */
 using namespace llvm;
 using namespace std;
@@ -63,7 +60,6 @@ struct StringEncryption : public ModulePass {
     if (Func->isDeclaration()) {
       return;
     }
-    srand(time(NULL));
     set<GlobalVariable *> Globals;
     // boot-strappish code stolen from
     // https://stackoverflow.com/questions/25761390/how-to-find-which-global-variables-are-used-in-a-function-by-using-llvm-api
@@ -90,7 +86,6 @@ struct StringEncryption : public ModulePass {
     }
     // This removes any GV that is not applicable for encryption
     for (GlobalVariable *GV : Globals) {
-      // TODO: Perform Actual Work
       // Note that we only perform instruction adding here.
       // Encrypting GVs are done in finalization to avoid encrypting GVs more
       // than once
@@ -98,9 +93,23 @@ struct StringEncryption : public ModulePass {
           GV->getSection() != StringRef("llvm.metadata") &&
           GV->getSection().find(StringRef("__objc")) == string::npos &&
           GV->getName().find("OBJC") == string::npos) {
-        if (ConstantDataSequential *CDS =
-                dyn_cast<ConstantDataSequential>(GV->getInitializer())) {
+        if (isa<ConstantDataSequential>(GV->getInitializer()) || isa<ConstantStruct>(GV->getInitializer())) {
           GV->setConstant(false);
+          ConstantDataSequential *CDS =NULL;
+          if(isa<ConstantDataSequential>(GV->getInitializer())){
+            CDS=dyn_cast<ConstantDataSequential>(GV->getInitializer());
+          }
+          else if(isa<ConstantStruct>(GV->getInitializer()) && Func->getParent()->getTypeByName("struct.__NSConstantString_tag")!=NULL){
+            ConstantStruct* CS=dyn_cast<ConstantStruct>(GV->getInitializer());
+            if(CS->getType()!=Func->getParent()->getTypeByName("struct.__NSConstantString_tag")){
+              continue;
+            }
+            GV=cast<GlobalVariable>(CS->getOperand(2)->stripPointerCasts());
+            CDS=cast<ConstantDataSequential>(GV->getInitializer());
+          }
+          else{
+            continue;
+          }
           Type *memberType = CDS->getElementType();
           // Ignore non-IntegerType
           if (!isa<IntegerType>(memberType)) {
@@ -194,7 +203,12 @@ struct StringEncryption : public ModulePass {
                     "Key and String type mismatch!");
       Type *memberType = Key->getElementType();
       IntegerType *intType = cast<IntegerType>(memberType);
-      //FIXME: ConstantDataArray returning ConstantAggregateZero
+      //Fixup GV sections otherwise we might fall into __TEXT and get a EXC_i386_GPFLT
+      //or other platform's equivalent
+      if(GV->getSection().find("__TEXT")!=string::npos){
+        GV->setSection("__DATA,__const");
+      }
+
 
       if (intType == Type::getInt8Ty(M.getContext())) {
         vector<uint8_t> Encrypted;
