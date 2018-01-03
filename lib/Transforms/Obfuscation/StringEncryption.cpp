@@ -61,14 +61,10 @@ struct StringEncryption : public ModulePass {
       return;
     }
     set<GlobalVariable *> Globals;
-    // boot-strappish code stolen from
-    // https://stackoverflow.com/questions/25761390/how-to-find-which-global-variables-are-used-in-a-function-by-using-llvm-api
-    // I'm sure def-use chain would be a lot more better
-    // But for now let's save ourselves some trouble
     set<Instruction *> Terminators;
     for (BasicBlock &BB : *Func) {
       for (Instruction &I : BB) {
-        if (TerminatorInst *TI = dyn_cast<TerminatorInst>(&I)) {
+        if (ReturnInst *TI = dyn_cast<ReturnInst>(&I)) {
           Terminators.insert(TI);
         }
         for (Value *Op : I.operands()) {
