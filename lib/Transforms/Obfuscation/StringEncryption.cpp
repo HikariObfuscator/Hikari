@@ -3,6 +3,13 @@
  *  https://github.com/Naville
  *  GPL V3 Licensed
  */
+/*
+Status Quo:
+Seems like this implementation CodeGen, on x86_64 you need to disable MMX and SSE
+or do nothing and enable O1 or above optimizations.
+I do feel like this is related to CG as the generated IR seems to work perfectly fine.
+Any backend guy wanna take a stab at this?
+*/
 #include "llvm/Transforms/Obfuscation/StringEncryption.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -21,27 +28,11 @@
 #include <map>
 #include <set>
 #include <string>
-/*
-  Unlike Armariris which inject decrytion code at llvm.global_ctors.
-  We try to find the containing Function of Users referencing our string GV.
-  Then we search for terminators.
-  We insert decryption code at begining or the function and encrypt it back at
-  terminators
-
-  For Users where we cant find a Function, we then inject decryption codes at
-  ctors
-*/
-/*
-Status: Currently we only handle strings passed in directly.
-GV strings are not properly handled
-*/
 using namespace llvm;
 using namespace std;
 namespace llvm {
 struct StringEncryption : public ModulePass {
   static char ID;
-  map<GlobalVariable * /*Value*/, Constant * /*Key*/>
-      keymap; // Map GV to keys for encryption
   StringEncryption() : ModulePass(ID) {}
   StringRef getPassName() const override {
     return StringRef("StringEncryption");
@@ -53,204 +44,201 @@ struct StringEncryption : public ModulePass {
       Function &F = *iter;
       HandleFunction(&F);
     }
-    EncryptGVs(M);
+    //EncryptGVs(M);
     return true;
   } // End runOnModule
+
+  void doF(Module& M){
+    //TODO: Handle GlobalVariables
+  }//End doF
+  void FixFunctionConstantExpr(Function* Func){
+
+    if (Func->isDeclaration()) {
+      return;
+    }
+    IRBuilder<> IRB(Func->getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
+    set<GlobalVariable *> Globals;
+    set<User *> Users;
+    //sReplace ConstantExpr with equal instructions
+    //Otherwise replacing on Constant will crash the compiler
+    for (BasicBlock &BB : *Func) {
+      for (Instruction &I : BB) {
+        for (Value *Op : I.operands()) {
+          if (ConstantExpr *C = dyn_cast<ConstantExpr>(Op)) {
+            Instruction* Inst=IRB.Insert(C->getAsInstruction());
+            C->replaceAllUsesWith(Inst);
+          }
+        }
+      }
+    }
+  }//End FixFunctionConstantExpr
   void HandleFunction(Function *Func) {
     if (Func->isDeclaration()) {
       return;
     }
+    FixFunctionConstantExpr(Func);
+    IRBuilder<> IRB(Func->getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
     set<GlobalVariable *> Globals;
-    set<Instruction *> Terminators;
+    set<User *> Users;
+    //sReplace ConstantExpr with equal instructions
+    //Otherwise replacing on Constant will crash the compiler
     for (BasicBlock &BB : *Func) {
       for (Instruction &I : BB) {
-        if (ReturnInst *TI = dyn_cast<ReturnInst>(&I)) {
-          Terminators.insert(TI);
-        }
         for (Value *Op : I.operands()) {
           if (GlobalVariable *G = dyn_cast<GlobalVariable>(Op)) {
+            Users.insert(&I);
             Globals.insert(G);
-          } else if (Constant *C = dyn_cast<Constant>(Op)) {
-            Constant *stripped = C->stripPointerCasts();
-            if (GlobalVariable *GV = dyn_cast<GlobalVariable>(stripped)) {
-              Globals.insert(GV);
-              continue;
-            }
           }
         }
       }
     }
-    // This removes any GV that is not applicable for encryption
+    set<GlobalVariable *> rawStrings;
+    set<GlobalVariable *> objCStrings;
+    map<GlobalVariable * /*Original C String*/, Value *>
+        encmap; // Map Original CString to dyn-generated value for use in ObjC
+                // String Transform
+
     for (GlobalVariable *GV : Globals) {
-      // Note that we only perform instruction adding here.
-      // Encrypting GVs are done in finalization to avoid encrypting GVs more
-      // than once
       if (GV->hasInitializer() &&
           GV->getSection() != StringRef("llvm.metadata") &&
           GV->getSection().find(StringRef("__objc")) == string::npos &&
           GV->getName().find("OBJC") == string::npos) {
-        if (isa<ConstantDataSequential>(GV->getInitializer()) || isa<ConstantStruct>(GV->getInitializer())) {
-          GV->setConstant(false);
-          ConstantDataSequential *CDS =NULL;
-          if(isa<ConstantDataSequential>(GV->getInitializer())){
-            CDS=dyn_cast<ConstantDataSequential>(GV->getInitializer());
-          }
-          else if(isa<ConstantStruct>(GV->getInitializer()) && Func->getParent()->getTypeByName("struct.__NSConstantString_tag")!=NULL){
-            ConstantStruct* CS=dyn_cast<ConstantStruct>(GV->getInitializer());
-            if(CS->getType()!=Func->getParent()->getTypeByName("struct.__NSConstantString_tag")){
-              continue;
-            }
-            GV=cast<GlobalVariable>(CS->getOperand(2)->stripPointerCasts());
-            CDS=cast<ConstantDataSequential>(GV->getInitializer());
-          }
-          else{
-            continue;
-          }
-          Type *memberType = CDS->getElementType();
-          // Ignore non-IntegerType
-          if (!isa<IntegerType>(memberType)) {
-            continue;
-          }
-          IntegerType *intType = cast<IntegerType>(memberType);
-          if (keymap.find(GV) == keymap.end()) {
-            // No Existing Key Found.
-            // Perform injection
-            if (intType == Type::getInt8Ty(GV->getParent()->getContext())) {
-              vector<uint8_t> keys;
-              for (unsigned i = 0; i < CDS->getNumElements(); i++) {
-                keys.push_back(cryptoutils->get_uint8_t());
-              }
-              Constant *KeyConst = ConstantDataVector::get(
-                  GV->getParent()->getContext(), ArrayRef<uint8_t>(keys));
-              keymap[GV] = KeyConst;
-            } else if (intType ==
-                       Type::getInt16Ty(GV->getParent()->getContext())) {
-              vector<uint16_t> keys;
-              for (unsigned i = 0; i < CDS->getNumElements(); i++) {
-                keys.push_back(cryptoutils->get_uint16_t());
-              }
-              Constant *KeyConst = ConstantDataVector::get(
-                  GV->getParent()->getContext(), ArrayRef<uint16_t>(keys));
-              keymap[GV] = KeyConst;
-            } else if (intType ==
-                       Type::getInt32Ty(GV->getParent()->getContext())) {
-              vector<uint32_t> keys;
-              for (unsigned i = 0; i < CDS->getNumElements(); i++) {
-                keys.push_back(cryptoutils->get_uint32_t());
-              }
-              Constant *KeyConst = ConstantDataVector::get(
-                  GV->getParent()->getContext(), ArrayRef<uint32_t>(keys));
-              keymap[GV] = KeyConst;
-            } else if (intType ==
-                       Type::getInt64Ty(GV->getParent()->getContext())) {
-              vector<uint64_t> keys;
-              for (unsigned i = 0; i < CDS->getNumElements(); i++) {
-                keys.push_back(cryptoutils->get_uint64_t());
-              }
-              Constant *KeyConst = ConstantDataVector::get(
-                  GV->getParent()->getContext(), ArrayRef<uint64_t>(keys));
-              keymap[GV] = KeyConst;
-            } else {
-              errs() << "Unsupported CDS Type\n";
-              abort();
-            }
-          }
-          // ADD XOR DecodeInstructions
-          IRBuilder<> IRB(Func->getEntryBlock().getFirstNonPHIOrDbgOrLifetime ());
-          Value *zero = ConstantInt::get(
-              Type::getInt32Ty(GV->getParent()->getContext()), 0);//Beginning Index
-          Value *zeroes[] = {zero,zero};
-          Value *GEP = IRB.CreateInBoundsGEP(GV, zeroes);
-          //BinaryOperations don't take CDAs,only CDVs
-          //FIXME: Figure out if CDA and CDV has same mem layout
-          Value* BCI=IRB.CreateBitCast(GEP,keymap[GV]->getType()->getPointerTo());
-          LoadInst *LI = IRB.CreateLoad(BCI);//ArrayType
-          Value *XOR = IRB.CreateXor(LI, keymap[GV]);
-          IRB.CreateStore(XOR, BCI);
-          for (Instruction *I : Terminators) {
-            IRBuilder<> IRB(I);
-            Value *zero = ConstantInt::get(
-                Type::getInt32Ty(GV->getParent()->getContext()), 0);
-            Value *zeroes[] = {zero, zero};
-            Value *GEP = IRB.CreateInBoundsGEP(GV, zeroes);
-            Value* BCI=IRB.CreateBitCast(GEP,keymap[GV]->getType()->getPointerTo());
-            LoadInst *LI = IRB.CreateLoad(BCI);//ArrayType
-            Value *XOR = IRB.CreateXor(LI, keymap[GV]);
-            IRB.CreateStore(XOR,BCI);
-          }
+        if (GV->getInitializer()->getType() ==
+            Func->getParent()->getTypeByName("struct.__NSConstantString_tag")) {
+          rawStrings.insert(cast<GlobalVariable>(cast<ConstantStruct>(GV->getInitializer())->getOperand(2)->stripPointerCasts()));
+          objCStrings.insert(GV);
+
+        } else if (isa<ConstantDataSequential>(GV->getInitializer())) {
+          rawStrings.insert(GV);
         }
       }
     }
-
-  } // End of HandleFunction
-  void EncryptGVs(Module &M){
-    // We've done Instruction Insertation
-    // Perform GV Encrytion
-    for (map<GlobalVariable *, Constant *>::iterator it = keymap.begin();
-         it != keymap.end(); ++it) {
-      GlobalVariable *GV = it->first;
-      assert(GV->hasInitializer() && "Encrypted GV doesn't have initializer");
-      ConstantDataSequential *Key = cast<ConstantDataSequential>(it->second);
-      ConstantDataSequential *GVInitializer =
-          cast<ConstantDataSequential>(GV->getInitializer());
-      assert(Key->getNumElements() == GVInitializer->getNumElements() &&
-             "Key and String size mismatch!");
-      assert(Key->getElementType() == GVInitializer->getElementType() &&
-                    "Key and String type mismatch!");
-      Type *memberType = Key->getElementType();
+    // This removes any GV that is not applicable for encryption
+    for (GlobalVariable *GV : rawStrings) {
+      // Note that we only perform instruction adding here.
+      // Encrypting GVs are done in finalization to avoid encrypting GVs more
+      // than once
+      ConstantDataSequential* CDS=cast<ConstantDataSequential>(GV->getInitializer());
+      Type *memberType = CDS->getElementType();
+      // Ignore non-IntegerType
+      if (!isa<IntegerType>(memberType)) {
+        continue;
+      }
       IntegerType *intType = cast<IntegerType>(memberType);
-      //Fixup GV sections otherwise we might fall into __TEXT and get a EXC_i386_GPFLT
-      //or other platform's equivalent
-      if(GV->getSection().find("__TEXT")!=string::npos){
-        GV->setSection("__DATA,__const");
-      }
-
-
-      if (intType == Type::getInt8Ty(M.getContext())) {
-        vector<uint8_t> Encrypted;
-        for (unsigned i = 0; i < Key->getNumElements(); i++) {
-          uint64_t K = Key->getElementAsInteger(i);
-          uint64_t S = GVInitializer->getElementAsInteger(i);
-          Encrypted.push_back(K^S);
+      Constant *KeyConst = NULL;
+      Constant *EncryptedConst = NULL;
+      if (intType == Type::getInt8Ty(GV->getParent()->getContext())) {
+        vector<uint8_t> keys;
+        vector<uint8_t> encry;
+        for (unsigned i = 0; i < CDS->getNumElements(); i++) {
+          uint8_t K = cryptoutils->get_uint8_t();
+          uint64_t V = CDS->getElementAsInteger(i);
+          keys.push_back(K);
+          encry.push_back(K ^ V);
         }
-        Constant* newInit=ConstantDataArray::get(M.getContext(),ArrayRef<uint8_t>(Encrypted));
-        GV->setInitializer(newInit);
-      }
-      else if (intType == Type::getInt16Ty(M.getContext())) {
-        vector<uint16_t> Encrypted;
-        for (unsigned i = 0; i < Key->getNumElements(); i++) {
-          uint64_t K = Key->getElementAsInteger(i);
-          uint64_t S = GVInitializer->getElementAsInteger(i);
-          Encrypted.push_back(K ^ S);
+        KeyConst = ConstantDataVector::get(GV->getParent()->getContext(),
+                                           ArrayRef<uint8_t>(keys));
+        EncryptedConst = ConstantDataVector::get(GV->getParent()->getContext(),
+                                                 ArrayRef<uint8_t>(encry));
+      } else if (intType == Type::getInt16Ty(GV->getParent()->getContext())) {
+        vector<uint16_t> keys;
+        vector<uint16_t> encry;
+        for (unsigned i = 0; i < CDS->getNumElements(); i++) {
+          uint16_t K = cryptoutils->get_uint16_t();
+          uint64_t V = CDS->getElementAsInteger(i);
+          keys.push_back(K);
+          encry.push_back(K ^ V);
         }
-        Constant* newInit=ConstantDataArray::get(M.getContext(),ArrayRef<uint16_t>(Encrypted));
-        GV->setInitializer(newInit);
-      } else if (intType == Type::getInt32Ty(M.getContext())) {
-        vector<uint32_t> Encrypted;
-        for (unsigned i = 0; i < Key->getNumElements(); i++) {
-          uint64_t K = Key->getElementAsInteger(i);
-          uint64_t S = GVInitializer->getElementAsInteger(i);
-          Encrypted.push_back(K ^ S);
+        KeyConst = ConstantDataVector::get(GV->getParent()->getContext(),
+                                           ArrayRef<uint16_t>(keys));
+        EncryptedConst = ConstantDataVector::get(GV->getParent()->getContext(),
+                                                 ArrayRef<uint16_t>(encry));
+      } else if (intType == Type::getInt32Ty(GV->getParent()->getContext())) {
+        vector<uint32_t> keys;
+        vector<uint32_t> encry;
+        for (unsigned i = 0; i < CDS->getNumElements(); i++) {
+          uint32_t K = cryptoutils->get_uint32_t();
+          uint64_t V = CDS->getElementAsInteger(i);
+          keys.push_back(K);
+          encry.push_back(K ^ V);
         }
-        Constant* newInit=ConstantDataArray::get(M.getContext(),ArrayRef<uint32_t>(Encrypted));
-        GV->setInitializer(newInit);
-      } else if (intType == Type::getInt64Ty(M.getContext())) {
-        vector<uint64_t> Encrypted;
-        for (unsigned i = 0; i < Key->getNumElements(); i++) {
-          uint64_t K = Key->getElementAsInteger(i);
-          uint64_t S = GVInitializer->getElementAsInteger(i);
-          Encrypted.push_back(K ^ S);
+        KeyConst = ConstantDataVector::get(GV->getParent()->getContext(),
+                                           ArrayRef<uint32_t>(keys));
+        EncryptedConst = ConstantDataVector::get(GV->getParent()->getContext(),
+                                                 ArrayRef<uint32_t>(encry));
+      } else if (intType == Type::getInt64Ty(GV->getParent()->getContext())) {
+        vector<uint64_t> keys;
+        vector<uint64_t> encry;
+        for (unsigned i = 0; i < CDS->getNumElements(); i++) {
+          uint64_t K = cryptoutils->get_uint64_t();
+          uint64_t V = CDS->getElementAsInteger(i);
+          keys.push_back(K);
+          encry.push_back(K ^ V);
         }
-        Constant* newInit=ConstantDataArray::get(M.getContext(),ArrayRef<uint64_t>(Encrypted));
-        GV->setInitializer(newInit);
-
+        KeyConst = ConstantDataVector::get(GV->getParent()->getContext(),
+                                           ArrayRef<uint64_t>(keys));
+        EncryptedConst = ConstantDataVector::get(GV->getParent()->getContext(),
+                                                 ArrayRef<uint64_t>(encry));
       } else {
-        errs() << "Unsupported CDS Type\n"<<*intType<<"\n";
+        errs() << "Unsupported CDS Type\n";
         abort();
       }
-      errs()<<"Rewritten GlobalVariable:"<<*GVInitializer<<" To:"<<*(GV->getInitializer())<<"\n";
+      // Setup XORed value
+
+      // ADD XOR DecodeInstructions
+      // Allocate A New Value On Stack And Perform XORing
+      // Do a Store+Load+XOR to avoid any potential optimizations
+      AllocaInst *allocated =
+          IRB.CreateAlloca(CDS->getType());
+      Value* BCI=IRB.CreateBitCast(allocated,EncryptedConst->getType()->getPointerTo());
+      IRB.CreateStore(EncryptedConst,BCI);
+      LoadInst *LI = IRB.CreateLoad(BCI);
+      Value *XORInst = IRB.CreateXor(LI, KeyConst);
+      IRB.CreateStore(XORInst,BCI);
+      encmap[GV] = allocated;
+      for (User *U : Users) {
+          U->replaceUsesOfWith(GV, allocated);
+      }
     }
-  }
+    for (GlobalVariable *GV : objCStrings) {
+      ConstantStruct* CS=cast<ConstantStruct>(GV->getInitializer());
+      AllocaInst *allocatedCFString = IRB.CreateAlloca(
+          Func->getParent()->getTypeByName("struct.__NSConstantString_tag"));
+      Value *zero =
+          ConstantInt::get(Type::getInt32Ty(GV->getParent()->getContext()), 0);
+      Value *one =
+          ConstantInt::get(Type::getInt32Ty(GV->getParent()->getContext()), 1);
+      Value *two =
+          ConstantInt::get(Type::getInt32Ty(GV->getParent()->getContext()), 2);
+      Value *three =
+          ConstantInt::get(Type::getInt32Ty(GV->getParent()->getContext()), 3);
+      IRB.CreateStore(CS->getOperand(0),IRB.CreateGEP(allocatedCFString,{zero,zero}));
+      IRB.CreateStore(CS->getOperand(1),IRB.CreateGEP(allocatedCFString,{zero,one}));
+      Value* stroffset=IRB.CreateGEP(allocatedCFString,{zero,two});
+      GlobalVariable* DecryptedString=cast<GlobalVariable>(CS->getOperand(2)->stripPointerCasts());
+      Value* BCI=IRB.CreateBitCast(encmap[DecryptedString],CS->getOperand(2)->getType());
+      IRB.CreateStore(BCI,stroffset);
+      IRB.CreateStore(CS->getOperand(3),IRB.CreateGEP(allocatedCFString,{zero,three}));
+      for (User *U : Users) {
+          U->replaceUsesOfWith(GV,allocatedCFString);
+      }
+    }
+    for(GlobalVariable *GV : objCStrings){
+      GV->removeDeadConstantUsers ();
+      //errs()<<*GV<<"  "<<GV->getNumUses ()<<"\n";
+      if(GV->getNumUses()==0){
+        GV->eraseFromParent();
+      }
+    }
+    for(GlobalVariable *GV : rawStrings){
+      GV->removeDeadConstantUsers ();
+      //errs()<<*GV<<"  "<<GV->getNumUses ()<<"\n";
+      if(GV->getNumUses()==0){
+        GV->eraseFromParent();
+      }
+    }
+    //FIXME: Replace uses
+  } // End of HandleFunction
 };
 Pass *createStringEncryptionPass() { return new StringEncryption(); }
 } // namespace llvm
