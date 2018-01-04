@@ -1,3 +1,11 @@
+/*
+ *  LLVM BogusControlFlow Pass
+ *  https://github.com/Naville
+ *  Relicensed into GPLV3 from original OLLVM Team's NCSA License
+ *  The main modification is the branching condition is calculated on-the-fly
+ *  Instead of hard-code the always true condition
+ *  Below is the original license and description
+ */
 //===- BogusControlFlow.cpp - BogusControlFlow Obfuscation
 // pass-------------------------===//
 //
