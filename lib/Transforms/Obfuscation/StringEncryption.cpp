@@ -44,13 +44,8 @@ struct StringEncryption : public ModulePass {
       Function &F = *iter;
       HandleFunction(&F);
     }
-    //EncryptGVs(M);
     return true;
   } // End runOnModule
-
-  void doF(Module& M){
-    //TODO: Handle GlobalVariables
-  }//End doF
   void FixFunctionConstantExpr(Function* Func){
 
     if (Func->isDeclaration()) {
@@ -59,7 +54,7 @@ struct StringEncryption : public ModulePass {
     IRBuilder<> IRB(Func->getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
     set<GlobalVariable *> Globals;
     set<User *> Users;
-    //sReplace ConstantExpr with equal instructions
+    //Replace ConstantExpr with equal instructions
     //Otherwise replacing on Constant will crash the compiler
     for (BasicBlock &BB : *Func) {
       for (Instruction &I : BB) {
@@ -80,8 +75,6 @@ struct StringEncryption : public ModulePass {
     IRBuilder<> IRB(Func->getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
     set<GlobalVariable *> Globals;
     set<User *> Users;
-    //sReplace ConstantExpr with equal instructions
-    //Otherwise replacing on Constant will crash the compiler
     for (BasicBlock &BB : *Func) {
       for (Instruction &I : BB) {
         for (Value *Op : I.operands()) {
@@ -115,9 +108,6 @@ struct StringEncryption : public ModulePass {
     }
     // This removes any GV that is not applicable for encryption
     for (GlobalVariable *GV : rawStrings) {
-      // Note that we only perform instruction adding here.
-      // Encrypting GVs are done in finalization to avoid encrypting GVs more
-      // than once
       ConstantDataSequential* CDS=cast<ConstantDataSequential>(GV->getInitializer());
       Type *memberType = CDS->getElementType();
       // Ignore non-IntegerType
@@ -197,9 +187,9 @@ struct StringEncryption : public ModulePass {
       LoadInst *LI = IRB.CreateLoad(allocated);
       Value *XORInst = IRB.CreateXor(LI, KeyConst);
       IRB.CreateStore(XORInst,allocated);
-      encmap[GV] = allocated;
+      encmap[GV] = IRB.CreateBitCast(allocated,CDS->getType()->getPointerTo());
       for (User *U : Users) {
-          U->replaceUsesOfWith(GV, allocated);
+          U->replaceUsesOfWith(GV,encmap[GV]);
       }
     }
     for (GlobalVariable *GV : objCStrings) {
