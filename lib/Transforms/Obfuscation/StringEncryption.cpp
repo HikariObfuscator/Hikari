@@ -188,13 +188,15 @@ struct StringEncryption : public ModulePass {
       // ADD XOR DecodeInstructions
       // Allocate A New Value On Stack And Perform XORing
       // Do a Store+Load+XOR to avoid any potential optimizations
+      // Note we cant force bitcast from CDA to CDV here
+      // The backend will get fucked up if we do so
       AllocaInst *allocated =
-          IRB.CreateAlloca(CDS->getType());
-      Value* BCI=IRB.CreateBitCast(allocated,EncryptedConst->getType()->getPointerTo());
-      IRB.CreateStore(EncryptedConst,BCI);
-      LoadInst *LI = IRB.CreateLoad(BCI);
+          IRB.CreateAlloca(KeyConst->getType());
+      //Value* BCI=IRB.CreateBitCast(allocated,EncryptedConst->getType()->getPointerTo());
+      IRB.CreateStore(EncryptedConst,allocated);
+      LoadInst *LI = IRB.CreateLoad(allocated);
       Value *XORInst = IRB.CreateXor(LI, KeyConst);
-      IRB.CreateStore(XORInst,BCI);
+      IRB.CreateStore(XORInst,allocated);
       encmap[GV] = allocated;
       for (User *U : Users) {
           U->replaceUsesOfWith(GV, allocated);
