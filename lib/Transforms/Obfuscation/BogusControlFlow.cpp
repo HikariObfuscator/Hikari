@@ -639,26 +639,6 @@ struct BogusControlFlow : public FunctionPass {
     // Replacing all the branches we found
     for (std::vector<Instruction *>::iterator i = toEdit.begin();
          i != toEdit.end(); ++i) {
-      // if y < 10 || x*(x+1) % 2 == 0
-      /*opX = new LoadInst ((Value *)x, "", (*i));
-      opY = new LoadInst ((Value *)y, "", (*i));
-
-      op = BinaryOperator::Create(Instruction::Sub, (Value *)opX,
-          ConstantInt::get(Type::getInt32Ty(M.getContext()), 1,
-            false), "", (*i));
-      op1 = BinaryOperator::Create(Instruction::Mul, (Value *)opX, op, "",
-      (*i)); op = BinaryOperator::Create(Instruction::URem, op1,
-          ConstantInt::get(Type::getInt32Ty(M.getContext()), 2,
-            false), "", (*i));
-      condition = new ICmpInst((*i), ICmpInst::ICMP_EQ, op,
-          ConstantInt::get(Type::getInt32Ty(M.getContext()), 0,
-            false));
-      condition2 = new ICmpInst((*i), ICmpInst::ICMP_SLT, opY,
-          ConstantInt::get(Type::getInt32Ty(M.getContext()), 10,
-            false));
-      op1 = BinaryOperator::Create(Instruction::Or, (Value *)condition,
-          (Value *)condition2, "", (*i));*/
-
       // We Use LLVM EE To Calculate LHS and RHS
 
       // Setup Initial Execution Environment
@@ -681,12 +661,26 @@ struct BogusControlFlow : public FunctionPass {
       // First,Construct a real RHS that will be used in the actual condition
       Constant *RealRHS = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
       // Prepare Initial LHS and RHS to bootstrap the emulator
-      Constant *LHS = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
-      Constant *RHS = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
+      Constant *LHSC = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
+      Constant *RHSC = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
+      GlobalVariable 	* LHSGV = new GlobalVariable(M, Type::getInt32Ty(M.getContext()), false,
+          GlobalValue::CommonLinkage,LHSC,"LHSGV");
+      GlobalVariable 	* RHSGV = new GlobalVariable(M, Type::getInt32Ty(M.getContext()), false,
+          GlobalValue::CommonLinkage,RHSC,"RHSGV");
+      GlobalVariable 	* emuLHSGV = new GlobalVariable(emuModule, Type::getInt32Ty(M.getContext()), false,
+              GlobalValue::CommonLinkage,LHSC,"EmulatorLHSGV");
+      GlobalVariable 	* emuRHSGV = new GlobalVariable(emuModule, Type::getInt32Ty(M.getContext()), false,
+              GlobalValue::CommonLinkage,RHSC,"EmulatorRHSGV");
+      LoadInst* LHS=new LoadInst(LHSGV,"Initial LHS",RealEntryBlock->getFirstNonPHIOrDbgOrLifetime());
+      LoadInst* RHS=new LoadInst(RHSGV,"Initial RHS",RealEntryBlock->getFirstNonPHIOrDbgOrLifetime());
+      LoadInst* emuLHS=new LoadInst(emuLHSGV,"Initial LHS For Emulation",EntryBlock);
+      LoadInst* emuRHS=new LoadInst(emuRHSGV,"Initial RHS For Emulation",EntryBlock);
       Instruction::BinaryOps initialOp =
           ops[rand() % (sizeof(ops) / sizeof(ops[0]))];
-      Instruction *emuLast = BinaryOperator::Create(initialOp, LHS, RHS,"EmuInitialCondition",EntryBlock);
-      Instruction *Last = BinaryOperator::Create(initialOp, LHS, RHS,"InitialCondition",RealEntryBlock->getFirstNonPHIOrDbgOrLifetime());
+      Instruction *emuLast = BinaryOperator::Create(initialOp, emuLHS, emuRHS,"EmuInitialCondition");
+      Instruction *Last = BinaryOperator::Create(initialOp, LHS, RHS,"InitialCondition");
+      emuLast->insertAfter(emuRHS);
+      Last->insertAfter(RHS);
       for (int i = 0; i < ConditionExpressionComplexity; i++) {
         Constant *newTmp = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
         Instruction::BinaryOps initialOp =
