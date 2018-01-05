@@ -141,6 +141,10 @@ static cl::opt<int>
              cl::desc("Choose how many time the -bcf pass loop on a function"),
              cl::value_desc("number of times"), cl::init(defaultObfTime),
              cl::Optional);
+static cl::opt<int>
+             ConditionExpressionComplexity("bcf_cond_compl",
+                      cl::desc("The complexity of the expression used to generate branching condition"),
+                      cl::value_desc("Complexity"), cl::init(5), cl::Optional);
 
 static Instruction::BinaryOps ops[] = {
     Instruction::Add,  Instruction::Sub,  Instruction::Mul, Instruction::SDiv,
@@ -683,7 +687,7 @@ struct BogusControlFlow : public FunctionPass {
           ops[rand() % (sizeof(ops) / sizeof(ops[0]))];
       Instruction *emuLast = BinaryOperator::Create(initialOp, LHS, RHS,"EmuInitialCondition",EntryBlock);
       Instruction *Last = BinaryOperator::Create(initialOp, LHS, RHS,"InitialCondition",RealEntryBlock->getFirstNonPHIOrDbgOrLifetime());
-      for (unsigned i = 0; i < 4; i++) {
+      for (int i = 0; i < ConditionExpressionComplexity; i++) {
         Constant *newTmp = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
         Instruction::BinaryOps initialOp =
             ops[rand() % (sizeof(ops) / sizeof(ops[0]))];
