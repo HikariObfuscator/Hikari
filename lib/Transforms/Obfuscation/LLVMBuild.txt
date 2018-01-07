@@ -20,4 +20,3 @@ type = Library
 name = Obfuscation
 parent = Transforms
 library_name = Obfuscation
-required_libraries = ExecutionEngine MCJIT Interpreter

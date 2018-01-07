@@ -59,7 +59,7 @@ namespace llvm{
   Pass* createAntiDebuggingPass(){
     return new AntiDebugging();
   }
-  static RegisterPass<AntiDebugging> X("antidbg", "Anti Debugging");
 }
 
 char AntiDebugging::ID = 0;
+INITIALIZE_PASS(AntiDebugging, "adb", "Enable AntiDebugging(Only Supports Apple Platform).",true, true)

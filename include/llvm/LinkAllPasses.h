@@ -50,6 +50,7 @@
 #include "llvm/Transforms/Utils/SymbolRewriter.h"
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 #include "llvm/Transforms/Vectorize.h"
+#include "llvm/Transforms/Obfuscation/Obfuscation.h"
 #include <cstdlib>
 
 namespace {
@@ -222,6 +223,15 @@ namespace {
       X.add(nullptr, 0, llvm::AAMDNodes()); // for -print-alias-sets
       (void) llvm::AreStatisticsEnabled();
       (void) llvm::sys::RunningOnValgrind();
+      (void) llvm::createStringEncryptionPass();
+      (void) llvm::createFunctionCallObfuscatePass();
+      (void) llvm::createAntiClassDumpPass();
+      (void) llvm::createBogusControlFlowPass();
+      (void) llvm::createFlatteningPass();
+      (void) llvm::createSplitBasicBlockPass();
+      (void) llvm::createSubstitutionPass();
+      (void) llvm::createAntiDebuggingPass();
+      (void) llvm::createSymbolObfuscationPass();
     }
   } ForcePassLinking; // Force link by creating a global definition.
 }

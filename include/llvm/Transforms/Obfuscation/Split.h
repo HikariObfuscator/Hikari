@@ -29,6 +29,7 @@
 
 // Namespace
 namespace llvm {
-	Pass *createSplitBasicBlock(bool flag);
+	Pass *createSplitBasicBlockPass();
+	void initializeSplitBasicBlockPass(PassRegistry &Registry);
 }
 #endif

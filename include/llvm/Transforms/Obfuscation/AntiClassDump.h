@@ -7,7 +7,7 @@ using namespace llvm;
 
 // Namespace
 namespace llvm {
-	enum ACDMode{FULL,THIN};
-	void addAntiClassDumpPass(legacy::PassManagerBase &PM,ACDMode flag);
+	Pass* createAntiClassDumpPass();
+	void initializeAntiClassDumpPass(PassRegistry &Registry);
 }
 #endif

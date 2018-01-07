@@ -3,13 +3,6 @@
  *  https://github.com/Naville
  *  GPL V3 Licensed
  */
-/*
-Status Quo:
-Seems like this implementation CodeGen, on x86_64 you need to disable MMX and SSE
-or do nothing and enable O1 or above optimizations.
-I do feel like this is related to CG as the generated IR seems to work perfectly fine.
-Any backend guy wanna take a stab at this?
-*/
 #include "llvm/Transforms/Obfuscation/StringEncryption.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -23,6 +16,7 @@ Any backend guy wanna take a stab at this?
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Obfuscation/CryptoUtils.h"
+#include "llvm/Transforms/Obfuscation/Obfuscation.h"
 #include <cstdlib>
 #include <iostream>
 #include <map>
@@ -236,4 +230,7 @@ Pass *createStringEncryptionPass() { return new StringEncryption(); }
 } // namespace llvm
 
 char StringEncryption::ID = 0;
-static RegisterPass<StringEncryption> X("strenc", "StringEncryption");
+INITIALIZE_PASS_BEGIN(StringEncryption, "strcry", "Enable String Encryption",true,true)
+INITIALIZE_PASS_DEPENDENCY(AntiClassDump)
+INITIALIZE_PASS_DEPENDENCY(FunctionCallObfuscate)
+INITIALIZE_PASS_END(StringEncryption, "strcry", "Enable String Encryption",true,true)

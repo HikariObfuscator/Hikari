@@ -386,6 +386,17 @@ int main(int argc, char **argv) {
   initializeIPO(Registry);
   initializeAnalysis(Registry);
   initializeTransformUtils(Registry);
+  //Begin Obfuscation Passes
+  initializeStringEncryptionPass(Registry);
+  initializeFunctionCallObfuscatePass(Registry);
+  initializeAntiClassDumpPass(Registry);
+  initializeBogusControlFlowPass(Registry);
+  initializeFlatteningPass(Registry);
+  initializeSplitBasicBlockPass(Registry);
+  initializeSubstitutionPass(Registry);
+  initializeAntiDebuggingPass(Registry);
+  initializeSymbolObfuscationPass(Registry);
+  //End Obfuscation Passes
   initializeInstCombine(Registry);
   initializeInstrumentation(Registry);
   initializeTarget(Registry);

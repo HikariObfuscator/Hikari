@@ -156,12 +156,7 @@ static CmpInst::Predicate preds[] = {CmpInst::ICMP_EQ,  CmpInst::ICMP_NE,
 namespace {
 struct BogusControlFlow : public FunctionPass {
   static char ID; // Pass identification
-  bool flag;
   BogusControlFlow() : FunctionPass(ID) {}
-  BogusControlFlow(bool flag) : FunctionPass(ID) {
-    this->flag = flag;
-    BogusControlFlow();
-  }
   bool doInitialization(Module &M) override{
     InitializeAllTargets();
     return false;
@@ -185,7 +180,7 @@ struct BogusControlFlow : public FunctionPass {
       return false;
     }
     // If fla annotations
-    if (toObfuscate(flag, &F, "bcf")) {
+    if (toObfuscate(true, &F, "bcf")) {
       bogus(F);
       doF(*F.getParent());
       return true;
@@ -654,19 +649,15 @@ struct BogusControlFlow : public FunctionPass {
           BasicBlock::Create(M.getContext(), "", emuFunction);
 
       BasicBlock* RealEntryBlock=&((*i)->getFunction()->getEntryBlock());
-      /*
-      FIXME:This requires O0 optimization otherwist InstructionCombine+ConstantFolding
-        Will de-obfuscate our obfuscation
-      */
       // First,Construct a real RHS that will be used in the actual condition
       Constant *RealRHS = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
       // Prepare Initial LHS and RHS to bootstrap the emulator
       Constant *LHSC = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
       Constant *RHSC = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
       GlobalVariable 	* LHSGV = new GlobalVariable(M, Type::getInt32Ty(M.getContext()), false,
-          GlobalValue::CommonLinkage,LHSC,"LHSGV");
+          GlobalValue::PrivateLinkage,LHSC,"LHSGV");
       GlobalVariable 	* RHSGV = new GlobalVariable(M, Type::getInt32Ty(M.getContext()), false,
-          GlobalValue::CommonLinkage,RHSC,"RHSGV");
+          GlobalValue::PrivateLinkage,RHSC,"RHSGV");
       GlobalVariable 	* emuLHSGV = new GlobalVariable(emuModule, Type::getInt32Ty(M.getContext()), false,
               GlobalValue::CommonLinkage,LHSC,"EmulatorLHSGV");
       GlobalVariable 	* emuRHSGV = new GlobalVariable(emuModule, Type::getInt32Ty(M.getContext()), false,
@@ -755,9 +746,5 @@ struct BogusControlFlow : public FunctionPass {
 } // namespace
 
 char BogusControlFlow::ID = 0;
-static RegisterPass<BogusControlFlow> X("boguscf",
-                                        "inserting bogus control flow");
-
-Pass *llvm::createBogus() { return new BogusControlFlow(); }
-
-Pass *llvm::createBogus(bool flag) { return new BogusControlFlow(flag); }
+INITIALIZE_PASS(BogusControlFlow, "bcfobf", "Enable BogusControlFlow.",true,true)
+Pass * llvm::createBogusControlFlowPass() { return new BogusControlFlow(); }

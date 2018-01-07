@@ -29,13 +29,8 @@ static cl::opt<int> SplitNum("split_num", cl::init(2),
 namespace {
 struct SplitBasicBlock : public FunctionPass {
   static char ID; // Pass identification, replacement for typeid
-  bool flag;
 
   SplitBasicBlock() : FunctionPass(ID) {}
-  SplitBasicBlock(bool flag) : FunctionPass(ID) {
-
-    this->flag = flag;
-  }
 
   bool runOnFunction(Function &F);
   void split(Function *f);
@@ -46,10 +41,9 @@ struct SplitBasicBlock : public FunctionPass {
 }
 
 char SplitBasicBlock::ID = 0;
-static RegisterPass<SplitBasicBlock> X("splitbbl", "BasicBlock splitting");
-
-Pass *llvm::createSplitBasicBlock(bool flag) {
-  return new SplitBasicBlock(flag);
+INITIALIZE_PASS(SplitBasicBlock, "splitobf", "Enable BasicBlockSpliting.",true, true)
+Pass *llvm::createSplitBasicBlockPass() {
+  return new SplitBasicBlock();
 }
 
 bool SplitBasicBlock::runOnFunction(Function &F) {
@@ -63,7 +57,7 @@ bool SplitBasicBlock::runOnFunction(Function &F) {
   Function *tmp = &F;
 
   // Do we obfuscate
-  if (toObfuscate(flag, tmp, "split")) {
+  if (toObfuscate(true, tmp, "split")) {
     split(tmp);
     ++Split;
   }

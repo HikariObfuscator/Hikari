@@ -1,3 +1,8 @@
+set(LLVM_LINK_COMPONENTS
+  ExecutionEngine
+  MCJIT
+  Interpreter
+)
 add_llvm_library(LLVMObfuscation
   SymbolObfuscation.cpp
   FunctionCallObfuscate.cpp

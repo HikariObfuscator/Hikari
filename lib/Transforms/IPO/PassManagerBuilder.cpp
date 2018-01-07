@@ -39,15 +39,7 @@
 #include "llvm/Transforms/Scalar/SimpleLoopUnswitch.h"
 #include "llvm/Transforms/Vectorize.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include "llvm/Transforms/Obfuscation/FunctionCallObfuscate.h"
-#include "llvm/Transforms/Obfuscation/SymbolObfuscation.h"
-#include "llvm/Transforms/Obfuscation/BogusControlFlow.h"
-#include "llvm/Transforms/Obfuscation/Flattening.h"
-#include "llvm/Transforms/Obfuscation/Substitution.h"
-#include "llvm/Transforms/Obfuscation/Split.h"
-#include "llvm/Transforms/Obfuscation/AntiDebugging.h"
-#include "llvm/Transforms/Obfuscation/AntiClassDump.h"
-#include "llvm/Transforms/Obfuscation/StringEncryption.h"
+#include "llvm/Transforms/Obfuscation/Obfuscation.h"
 using namespace llvm;
 
 static cl::opt<bool>
@@ -152,12 +144,12 @@ static cl::opt<bool>
 static cl::opt<bool> EnableGVNSink(
     "enable-gvn-sink", cl::init(false), cl::Hidden,
     cl::desc("Enable the GVN sinking pass (default = off)"));
-
+//Begin Obfuscator Options
 static cl::opt<bool> EnableBogusControlFlow("enable-bcfobf",cl::init(false),cl::NotHidden,cl::desc("Enable BogusControlFlow."));
 static cl::opt<bool> EnableFlattening("enable-cffobf",cl::init(false),cl::NotHidden,cl::desc("Enable Flattening."));
 static cl::opt<bool> EnableBasicBlockSplit("enable-splitobf",cl::init(false),cl::NotHidden,cl::desc("Enable BasicBlockSpliting."));
 static cl::opt<bool> EnableSubstitution("enable-subobf",cl::init(false),cl::NotHidden,cl::desc("Enable Instruction Substitution."));
-static cl::opt<bool> EnableObfuscation("enable-allobf",cl::init(false),cl::NotHidden,cl::desc("Enable All Obfuscation.(Except LTO Passes)"));
+static cl::opt<bool> EnableAllObfuscation("enable-allobf",cl::init(false),cl::NotHidden,cl::desc("Enable All Obfuscation.(Except LTO Passes)"));
 static cl::opt<bool> EnableAntiDebugging("enable-adb",cl::init(false),cl::NotHidden,cl::desc("Enable AntiDebugging."));
 static cl::opt<bool> EnableFunctionCallObfuscate(
     "enable-fco", cl::init(false), cl::NotHidden,
@@ -165,6 +157,9 @@ static cl::opt<bool> EnableFunctionCallObfuscate(
 static cl::opt<bool> EnableStringEncryption(
         "enable-strcry", cl::init(false), cl::NotHidden,
         cl::desc("Enable Function CallSite Obfuscation."));
+static cl::opt<bool> EnableSymbolObfuscation(
+                "enable-symobf", cl::init(false), cl::NotHidden,
+                cl::desc("Enable Symbol Obfuscation."));
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
     SizeLevel = 0;
@@ -260,6 +255,24 @@ void PassManagerBuilder::addInstructionCombiningPass(
 void PassManagerBuilder::populateFunctionPassManager(
     legacy::FunctionPassManager &FPM) {
   addExtensionsToPM(EP_EarlyAsPossible, FPM);
+  if(EnableAllObfuscation||EnableBogusControlFlow){
+    FPM.add(createBogusControlFlowPass());
+  }
+  if(EnableAllObfuscation||EnableFlattening){
+    FPM.add(createFlatteningPass());
+  }
+  if(EnableAllObfuscation||EnableBasicBlockSplit){
+    FPM.add(createFlatteningPass());
+  }
+  if(EnableAllObfuscation||EnableSubstitution){
+    FPM.add(createSubstitutionPass());
+  }
+  if(EnableAllObfuscation||EnableAntiDebugging){
+    FPM.add(createAntiDebuggingPass());
+  }
+  if(EnableAllObfuscation||EnableFunctionCallObfuscate){
+    FPM.add(createFunctionCallObfuscatePass());
+  }
   FPM.add(createEntryExitInstrumenterPass());
 
   // Add LibraryInfo if we have some.
@@ -411,6 +424,9 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
 
 void PassManagerBuilder::populateModulePassManager(
     legacy::PassManagerBase &MPM) {
+  if(EnableStringEncryption||EnableAllObfuscation){
+    MPM.add(createStringEncryptionPass());
+  }
   if (!PGOSampleUse.empty()) {
     MPM.add(createPruneEHPass());
     MPM.add(createSampleProfileLoaderPass(PGOSampleUse));
@@ -418,29 +434,6 @@ void PassManagerBuilder::populateModulePassManager(
 
   // Allow forcing function attributes as a debugging and tuning aid.
   MPM.add(createForceFunctionAttrsLegacyPass());
-  //Inject Our Passes
-  if(EnableBogusControlFlow||EnableObfuscation){
-    MPM.add(createBogus());
-  }
-  if(EnableBasicBlockSplit||EnableObfuscation){
-    MPM.add(createSplitBasicBlock(true));
-  }
-  if(EnableFlattening||EnableObfuscation){
-    MPM.add(createFlattening());
-  }
-  if(EnableSubstitution||EnableObfuscation){
-    MPM.add(createSubstitution());
-  }
-  if(EnableAntiDebugging||EnableObfuscation){
-    MPM.add(createAntiDebuggingPass());
-  }
-  addAntiClassDumpPass(MPM,ACDMode::THIN);
-  if(EnableFunctionCallObfuscate||EnableObfuscation){
-    MPM.add(createFunctionCallObfuscatePass());
-  }
-  if(EnableStringEncryption||EnableObfuscation){
-    MPM.add(createStringEncryptionPass());
-  }
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.
   if (OptLevel == 0) {
@@ -937,9 +930,6 @@ void PassManagerBuilder::populateThinLTOPassManager(
 }
 
 void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
-    addSymbolObfPass(PM);
-    //FIXME: Implement Stage 2
-    //addAntiClassDumpPass(PM,ACDMode::FULL);
   if (LibraryInfo)
     PM.add(new TargetLibraryInfoWrapperPass(*LibraryInfo));
 
@@ -969,6 +959,9 @@ void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
 
   if (VerifyOutput)
     PM.add(createVerifierPass());
+  if(EnableSymbolObfuscation||EnableAllObfuscation){
+    PM.add(createSymbolObfuscationPass());
+  }
 }
 
 inline PassManagerBuilder *unwrap(LLVMPassManagerBuilderRef P) {

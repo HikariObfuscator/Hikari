@@ -7,7 +7,7 @@
  * current translation unit then replace then with dlopen/dlsym calls
  */
 
-#include "llvm/Transforms/Obfuscation/FunctionCallObfuscate.h"
+#include "llvm/Transforms/Obfuscation/Obfuscation.h"
 #include "json.hpp"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/CallSite.h"
@@ -204,6 +204,8 @@ struct FunctionCallObfuscate : public FunctionPass {
   }
 };
 Pass *createFunctionCallObfuscatePass() { return new FunctionCallObfuscate(); }
-static RegisterPass<FunctionCallObfuscate> X("fco", "Function Call Obfuscation");
 } // namespace llvm
 char FunctionCallObfuscate::ID = 0;
+INITIALIZE_PASS_BEGIN(FunctionCallObfuscate, "fcoobf", "Enable Function CallSite Obfuscation.",true,true)
+INITIALIZE_PASS_DEPENDENCY(AntiClassDump)
+INITIALIZE_PASS_END(FunctionCallObfuscate, "fcoobf", "Enable Function CallSite Obfuscation.",true,true)

@@ -22,7 +22,6 @@
 using namespace llvm;
 using namespace std;
 static string obfcharacters="qwertyuiopasdfghjklzxcvbnm1234567890";
-static cl::opt<bool> EnableSymbolObfuscate("enable-symoff",cl::init(false),cl::NotHidden,cl::desc("Enable Symbol Obfuscation.Use with LTO"));
 namespace llvm{
   struct SymbolObfuscation : public ModulePass {
     static char ID;
@@ -56,12 +55,9 @@ namespace llvm{
       return true;
     }
   };
-  void addSymbolObfPass(legacy::PassManagerBase &PM) {
-    if(EnableSymbolObfuscate){
-      PM.add(new SymbolObfuscation());
-    }
-  }
-  static RegisterPass<SymbolObfuscation> X("symobf", "SymbolObfuscation");
 }
-
+Pass *llvm::createSymbolObfuscationPass(){
+  return new SymbolObfuscation();
+}
 char SymbolObfuscation::ID = 0;
+INITIALIZE_PASS(SymbolObfuscation, "symobf", "Enable Symbol Obfuscation",true,true)

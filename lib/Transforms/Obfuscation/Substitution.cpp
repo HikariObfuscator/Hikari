@@ -54,10 +54,7 @@ struct Substitution : public FunctionPass {
   void (Substitution::*funcXor[NUMBER_XOR_SUBST])(BinaryOperator *bo);
   bool flag;
 
-  Substitution() : FunctionPass(ID) {}
-
-  Substitution(bool flag) : FunctionPass(ID) {
-    this->flag = flag;
+  Substitution() : FunctionPass(ID) {
     funcAdd[0] = &Substitution::addNeg;
     funcAdd[1] = &Substitution::addDoubleNeg;
     funcAdd[2] = &Substitution::addRand;
@@ -101,9 +98,8 @@ struct Substitution : public FunctionPass {
 }
 
 char Substitution::ID = 0;
-static RegisterPass<Substitution> X("substitution", "operators substitution");
-Pass *llvm::createSubstitution(bool flag) { return new Substitution(flag); }
-Pass *llvm::createSubstitution() { return new Substitution(true); }
+INITIALIZE_PASS(Substitution, "subobf", "Enable Instruction Substitution.",true, true)
+Pass *llvm::createSubstitutionPass() { return new Substitution(); }
 bool Substitution::runOnFunction(Function &F) {
    // Check if the percentage is correct
    if (ObfTimes <= 0) {
