@@ -152,9 +152,7 @@ static cl::opt<EngineKind::Kind> EEModeforEvaluation("bcf_eval_mode",cl::desc("M
   clEnumVal(EngineKind::JIT, "JIT"),
   clEnumVal(EngineKind::Either, "Either")));
 static Instruction::BinaryOps ops[] = {
-    Instruction::Add,  Instruction::Sub,  Instruction::Mul, Instruction::SDiv,
-    Instruction::URem, Instruction::SRem, Instruction::Shl, Instruction::LShr,
-    Instruction::AShr, Instruction::And,  Instruction::Or,  Instruction::Xor};
+    Instruction::Add,  Instruction::Sub,Instruction::And,  Instruction::Or,  Instruction::Xor};
 static CmpInst::Predicate preds[] = {CmpInst::ICMP_EQ,  CmpInst::ICMP_NE,
                                      CmpInst::ICMP_UGT, CmpInst::ICMP_UGE,
                                      CmpInst::ICMP_ULT, CmpInst::ICMP_ULE};
@@ -665,12 +663,8 @@ struct BogusControlFlow : public FunctionPass {
           GlobalValue::PrivateLinkage,LHSC,"LHSGV");
       GlobalVariable 	* RHSGV = new GlobalVariable(M, Type::getInt32Ty(M.getContext()), false,
           GlobalValue::PrivateLinkage,RHSC,"RHSGV");
-      //GlobalVariable 	* emuLHSGV = new GlobalVariable(emuModule, Type::getInt32Ty(M.getContext()), false,GlobalValue::PrivateLinkage,LHSC,"EmulatorLHSGV");
-      //GlobalVariable 	* emuRHSGV = new GlobalVariable(emuModule, Type::getInt32Ty(M.getContext()), false,GlobalValue::PrivateLinkage,RHSC,"EmulatorRHSGV");
       LoadInst* LHS=IRBReal.CreateLoad(LHSGV,"Initial LHS");
       LoadInst* RHS=IRBReal.CreateLoad(RHSGV,"Initial LHS");
-      //LoadInst* emuLHS=IRBEmu.CreateLoad(emuLHSGV,"Initial LHS For Emulation");
-      //LoadInst* emuRHS=IRBEmu.CreateLoad(emuRHSGV,"Initial RHS For Emulation");
       //To Speed-Up Evaluation
       Value* emuLHS=LHSC;
       Value* emuRHS=RHSC;
@@ -705,14 +699,16 @@ struct BogusControlFlow : public FunctionPass {
       uint64_t emulateResult = GV.IntVal.getLimitedValue();
       if (emulateResult==1) {
         // Our ConstantExpr evaluates to true;
-        BranchInst::Create(((BranchInst *)*i)->getSuccessor(0),
+        BranchInst*BI=BranchInst::Create(((BranchInst *)*i)->getSuccessor(0),
                            ((BranchInst *)*i)->getSuccessor(1), (Value *)Last,
                            ((BranchInst *)*i)->getParent());
+        DEBUG_WITH_TYPE("gen", errs()<<(*i)->getFunction()->getName()<<" Always True:\n"<<*BI<<"\n");
       } else {
         // False, swap operands
-        BranchInst::Create(((BranchInst *)*i)->getSuccessor(1),
+        BranchInst* BI=BranchInst::Create(((BranchInst *)*i)->getSuccessor(1),
                            ((BranchInst *)*i)->getSuccessor(0), (Value *)Last,
                            ((BranchInst *)*i)->getParent());
+        DEBUG_WITH_TYPE("gen", errs()<<(*i)->getFunction()->getName()<<" Always False:\n"<<*BI<<"\n");
       }
       EntryBlock->eraseFromParent();
       emuFunction->eraseFromParent();

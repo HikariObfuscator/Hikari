@@ -427,18 +427,6 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
 
 void PassManagerBuilder::populateModulePassManager(
     legacy::PassManagerBase &MPM) {
-  if (EnableAllObfuscation || EnableAntiDebugging) {
-    MPM.add(createAntiDebuggingPass());
-  }
-  if (EnableAllObfuscation || EnableAntiClassDump) {
-    MPM.add(createAntiClassDumpPass());
-  }
-  if (EnableAllObfuscation || EnableFunctionCallObfuscate) {
-    MPM.add(createFunctionCallObfuscatePass());
-  }
-  if (EnableAllObfuscation || EnableStringEncryption) {
-    MPM.add(createStringEncryptionPass());
-  }
   if (EnableAllObfuscation || EnableBogusControlFlow) {
     MPM.add(createBogusControlFlowPass());
   }
@@ -450,6 +438,18 @@ void PassManagerBuilder::populateModulePassManager(
   }
   if (EnableAllObfuscation || EnableSubstitution) {
     MPM.add(createSubstitutionPass());
+  }
+  if (EnableAllObfuscation || EnableAntiDebugging) {
+    MPM.add(createAntiDebuggingPass());
+  }
+  if (EnableAllObfuscation || EnableAntiClassDump) {
+    MPM.add(createAntiClassDumpPass());
+  }
+  if (EnableAllObfuscation || EnableFunctionCallObfuscate) {
+    MPM.add(createFunctionCallObfuscatePass());
+  }
+  if (EnableAllObfuscation || EnableStringEncryption) {
+    MPM.add(createStringEncryptionPass());
   }
   if (!PGOSampleUse.empty()) {
     MPM.add(createPruneEHPass());
