@@ -675,19 +675,19 @@ struct BogusControlFlow : public FunctionPass {
       Value* emuLHS=LHSC;
       Value* emuRHS=RHSC;
       Instruction::BinaryOps initialOp =
-          ops[rand() % (sizeof(ops) / sizeof(ops[0]))];
+          ops[llvm::cryptoutils->get_uint32_t() % (sizeof(ops) / sizeof(ops[0]))];
       Value *emuLast = IRBEmu.CreateBinOp(initialOp, emuLHS, emuRHS,"EmuInitialCondition");
       Value *Last = IRBReal.CreateBinOp(initialOp, LHS, RHS,"InitialCondition");
       for (int i = 0; i < ConditionExpressionComplexity; i++) {
         Constant *newTmp = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
         Instruction::BinaryOps initialOp =
-            ops[rand() % (sizeof(ops) / sizeof(ops[0]))];
+            ops[llvm::cryptoutils->get_uint32_t() % (sizeof(ops) / sizeof(ops[0]))];
             emuLast = IRBEmu.CreateBinOp(initialOp, emuLast, newTmp,"EmuInitialCondition");
             Last = IRBReal.CreateBinOp(initialOp, Last,newTmp,"InitialCondition");
       }
       // Randomly Generate Predicate
       CmpInst::Predicate pred =
-          preds[rand() % (sizeof(preds) / sizeof(preds[0]))];
+          preds[llvm::cryptoutils->get_uint32_t() % (sizeof(preds) / sizeof(preds[0]))];
       Last=IRBReal.CreateICmp(pred, Last, RealRHS);
       emuLast=IRBEmu.CreateICmp(pred, emuLast, RealRHS);
       IRBEmu.CreateRet(emuLast);

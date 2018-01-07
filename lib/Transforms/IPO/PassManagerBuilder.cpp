@@ -142,6 +142,8 @@ static cl::opt<bool>
     EnableGVNSink("enable-gvn-sink", cl::init(false), cl::Hidden,
                   cl::desc("Enable the GVN sinking pass (default = off)"));
 // Begin Obfuscator Options
+static cl::opt<std::string> AesSeed("aesSeed", cl::init(""),
+                                    cl::desc("seed for the AES-CTR PRNG"));
 static cl::opt<bool> EnableAntiClassDump("enable-acdobf", cl::init(false),
                                          cl::NotHidden,
                                          cl::desc("Enable AntiClassDump."));
@@ -193,6 +195,9 @@ PassManagerBuilder::PassManagerBuilder() {
   PrepareForThinLTO = EnablePrepareForThinLTO;
   PerformThinLTO = false;
   DivergentTarget = false;
+  if(!AesSeed.empty()) {
+    llvm::cryptoutils->prng_seed(AesSeed.c_str());
+  }
 }
 
 PassManagerBuilder::~PassManagerBuilder() {
