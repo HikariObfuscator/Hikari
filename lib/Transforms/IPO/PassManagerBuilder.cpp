@@ -143,6 +143,9 @@ static cl::opt<bool>
                   cl::desc("Enable the GVN sinking pass (default = off)"));
 // Begin Obfuscator Options
 static cl::opt<bool>
+    EnableAntiClassDump("enable-acdobf", cl::init(false), cl::NotHidden,
+                            cl::desc("Enable AntiClassDump."));
+static cl::opt<bool>
     EnableBogusControlFlow("enable-bcfobf", cl::init(false), cl::NotHidden,
                            cl::desc("Enable BogusControlFlow."));
 static cl::opt<bool> EnableFlattening("enable-cffobf", cl::init(false),
@@ -434,10 +437,13 @@ void PassManagerBuilder::populateModulePassManager(
   if (EnableAllObfuscation || EnableAntiDebugging) {
     MPM.add(createAntiDebuggingPass());
   }
+  if (EnableAllObfuscation || EnableAntiClassDump) {
+    MPM.add(createAntiClassDumpPass());
+  }
   if (EnableAllObfuscation || EnableFunctionCallObfuscate) {
     MPM.add(createFunctionCallObfuscatePass());
   }
-  if (EnableStringEncryption || EnableAllObfuscation) {
+  if (EnableAllObfuscation || EnableStringEncryption) {
     MPM.add(createStringEncryptionPass());
   }
   if (!PGOSampleUse.empty()) {

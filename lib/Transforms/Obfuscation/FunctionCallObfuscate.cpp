@@ -41,7 +41,8 @@ struct FunctionCallObfuscate : public FunctionPass {
   json Configuration;
   FunctionCallObfuscate() : FunctionPass(ID) {}
   StringRef getPassName()const override{return StringRef("FunctionCallObfuscate");}
-  bool doInitialization(Module &M) override {
+  virtual bool doInitialization(Module &M) override {
+    // Basic Defs
     if (SymbolConfigPath == "+-x/") {
       SmallString<32> Path;
       if (sys::path::home_directory(Path)) { // Stolen from LineEditor.cpp
@@ -52,7 +53,83 @@ struct FunctionCallObfuscate : public FunctionPass {
     errs() << "Loading Symbol Configuration From:" << SymbolConfigPath << "\n";
     ifstream infile(SymbolConfigPath);
     infile >> this->Configuration;
-    return false;
+    Triple tri(M.getTargetTriple());
+    if (tri.getVendor() != Triple::VendorType::Apple) {
+      return false;
+    }
+    Type *Int64Ty = Type::getInt64Ty(M.getContext());
+    Type *Int32Ty = Type::getInt32Ty(M.getContext());
+    Type *Int8PtrTy = Type::getInt8PtrTy(M.getContext());
+    Type *Int8Ty = Type::getInt8Ty(M.getContext());
+    // Generic ObjC Runtime Declarations
+    FunctionType *IMPType =
+        FunctionType::get(Int8PtrTy, {Int8PtrTy, Int8PtrTy}, true);
+    PointerType *IMPPointerType = PointerType::get(IMPType, 0);
+    vector<Type *> classReplaceMethodTypeArgs;
+    classReplaceMethodTypeArgs.push_back(Int8PtrTy);
+    classReplaceMethodTypeArgs.push_back(Int8PtrTy);
+    classReplaceMethodTypeArgs.push_back(IMPPointerType);
+    classReplaceMethodTypeArgs.push_back(Int8PtrTy);
+    FunctionType *class_replaceMethod_type =
+        FunctionType::get(IMPPointerType, classReplaceMethodTypeArgs, false);
+    M.getOrInsertFunction("class_replaceMethod", class_replaceMethod_type);
+    FunctionType *sel_registerName_type =
+        FunctionType::get(Int8PtrTy, {Int8PtrTy}, false);
+    M.getOrInsertFunction("sel_registerName", sel_registerName_type);
+    FunctionType *objc_getClass_type =
+        FunctionType::get(Int8PtrTy, {Int8PtrTy}, false);
+    M.getOrInsertFunction("objc_getClass", objc_getClass_type);
+    M.getOrInsertFunction("objc_getMetaClass", objc_getClass_type);
+    StructType *objc_property_attribute_t_type = reinterpret_cast<StructType *>(
+        M.getTypeByName("struct.objc_property_attribute_t"));
+    if (objc_property_attribute_t_type == NULL) {
+      vector<Type *> types;
+      types.push_back(Int8PtrTy);
+      types.push_back(Int8PtrTy);
+      objc_property_attribute_t_type = StructType::create(
+          ArrayRef<Type *>(types), "struct.objc_property_attribute_t");
+      M.getOrInsertGlobal("struct.objc_property_attribute_t",
+                          objc_property_attribute_t_type);
+    }
+    vector<Type *> allocaClsTypeVector;
+    vector<Type *> addIvarTypeVector;
+    vector<Type *> addPropTypeVector;
+    allocaClsTypeVector.push_back(Int8PtrTy);
+    allocaClsTypeVector.push_back(Int8PtrTy);
+    addIvarTypeVector.push_back(Int8PtrTy);
+    addIvarTypeVector.push_back(Int8PtrTy);
+    addPropTypeVector.push_back(Int8PtrTy);
+    addPropTypeVector.push_back(Int8PtrTy);
+    addPropTypeVector.push_back(objc_property_attribute_t_type->getPointerTo());
+    if (tri.isArch64Bit()) {
+      // We are 64Bit Device
+      allocaClsTypeVector.push_back(Int64Ty);
+      addIvarTypeVector.push_back(Int64Ty);
+      addPropTypeVector.push_back(Int64Ty);
+    } else {
+      // Not 64Bit.However we are still on apple platform.So We are
+      // ARMV7/ARMV7S/i386
+      // PowerPC is ignored, feel free to open a PR if you want to
+      allocaClsTypeVector.push_back(Int32Ty);
+      addIvarTypeVector.push_back(Int32Ty);
+      addPropTypeVector.push_back(Int32Ty);
+    }
+    addIvarTypeVector.push_back(Int8Ty);
+    addIvarTypeVector.push_back(Int8PtrTy);
+    // Types Collected. Now Inject Functions
+    FunctionType *addIvarType =
+        FunctionType::get(Int8Ty, ArrayRef<Type *>(addIvarTypeVector), false);
+    M.getOrInsertFunction("class_addIvar", addIvarType);
+    FunctionType *addPropType =
+        FunctionType::get(Int8Ty, ArrayRef<Type *>(addPropTypeVector), false);
+    M.getOrInsertFunction("class_addProperty", addPropType);
+    FunctionType *class_getName_Type =
+        FunctionType::get(Int8PtrTy, {Int8PtrTy}, false);
+    M.getOrInsertFunction("class_getName", class_getName_Type);
+    FunctionType *objc_getMetaClass_Type =
+        FunctionType::get(Int8PtrTy, {Int8PtrTy}, false);
+    M.getOrInsertFunction("objc_getMetaClass", objc_getMetaClass_Type);
+    return true;
   }
   void HandleObjC(Module &M) {
     // Iterate all CLASSREF uses and replace with objc_getClass() call
@@ -67,15 +144,15 @@ struct FunctionCallObfuscate : public FunctionPass {
           for (auto U = GV.user_begin(); U != GV.user_end(); U++) {
             if (Instruction *I = dyn_cast<Instruction>(*U)) {
               IRBuilder<> builder(I);
-              FunctionType *objc_getClass_type = FunctionType::get(
-                  I->getType(), {Type::getInt8PtrTy(M.getContext())}, false);
               Function *objc_getClass_Func = cast<Function>(
-                  M.getOrInsertFunction("objc_getClass", objc_getClass_type));
+                  M.getFunction("objc_getClass"));
               Value *newClassName =
                   builder.CreateGlobalStringPtr(StringRef(className));
               CallInst *CI =
                   builder.CreateCall(objc_getClass_Func, {newClassName});
-              I->replaceAllUsesWith(CI);
+              //We need to bitcast it back to avoid IRVerifier
+              Value* BCI=builder.CreateBitCast(CI,I->getType());
+              I->replaceAllUsesWith(BCI);
               I->eraseFromParent();
             }
           }
@@ -93,15 +170,14 @@ struct FunctionCallObfuscate : public FunctionPass {
           for (auto U = GV.user_begin(); U != GV.user_end(); U++) {
             if (Instruction *I = dyn_cast<Instruction>(*U)) {
               IRBuilder<> builder(I);
-              FunctionType *sel_registerName_type = FunctionType::get(
-                  I->getType(), {Type::getInt8PtrTy(M.getContext())}, false);
               Function *sel_registerName_Func =
-                  cast<Function>(M.getOrInsertFunction("sel_registerName",
-                                                       sel_registerName_type));
+                  cast<Function>(M.getFunction("sel_registerName"));
               Value *newGlobalSELName = builder.CreateGlobalStringPtr(SELName);
               CallInst *CI =
                   builder.CreateCall(sel_registerName_Func, {newGlobalSELName});
-              I->replaceAllUsesWith(CI);
+              //We need to bitcast it back to avoid IRVerifier
+              Value* BCI=builder.CreateBitCast(CI,I->getType());
+              I->replaceAllUsesWith(BCI);
               I->eraseFromParent();
             }
           }

@@ -36,7 +36,7 @@
 #include <string>
 using namespace llvm;
 using namespace std;
-static cl::opt<bool> UseInitialize("acd-use-initialize", cl::init(false),
+static cl::opt<bool> UseInitialize("acd-use-initialize", cl::init(true),
                                    cl::NotHidden,
                                    cl::desc("[AntiClassDump]Inject codes to +initialize"));
 namespace llvm {

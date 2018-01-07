@@ -55,7 +55,7 @@ struct StringEncryption : public ModulePass {
         for (Value *Op : I.operands()) {
           if (ConstantExpr *C = dyn_cast<ConstantExpr>(Op)) {
             Instruction* Inst=IRB.Insert(C->getAsInstruction());
-            C->replaceAllUsesWith(Inst);
+            I.replaceUsesOfWith(C,Inst);
           }
         }
       }
