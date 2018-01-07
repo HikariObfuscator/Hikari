@@ -362,8 +362,30 @@ struct BogusControlFlow : public FunctionPass {
     Twine *var6 = new Twine("condition2");
     FCmpInst *condition2 =
         new FCmpInst(*originalBB, CmpInst::FCMP_TRUE, LHS, RHS, *var6);
-    BranchInst::Create(originalBBpart2, alteredBB, (Value *)condition2,
-                       originalBB);
+    //BranchInst::Create(originalBBpart2, alteredBB, (Value *)condition2,originalBB);
+    //Do random behavior to avoid pattern recognition
+    //This is achieved by jumping to a random BB
+    switch (llvm::cryptoutils->get_uint16_t()%3){
+      case 0:{
+        BranchInst::Create(originalBBpart2,originalBB);
+        break;
+      }
+      case 1:{
+        BranchInst::Create(originalBBpart2,originalBBpart2, (Value *)condition2,
+                         originalBB);
+        break;
+      }
+      case 2:{
+        BranchInst::Create(originalBBpart2,alteredBB, (Value *)condition2,
+                         originalBB);
+        break;
+      }
+      default:{
+        BranchInst::Create(originalBBpart2,originalBB);
+        break;
+      }
+
+    }
     DEBUG_WITH_TYPE("gen", errs()
                                << "bcf: Terminator original basic block: ok\n");
     DEBUG_WITH_TYPE("gen", errs() << "bcf: End of addBogusFlow().\n");
