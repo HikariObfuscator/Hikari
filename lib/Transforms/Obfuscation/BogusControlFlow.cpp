@@ -689,7 +689,6 @@ struct BogusControlFlow : public FunctionPass {
       string enginebuildererrstr;
       EngineBuilder EB(move(emuUP));
       EB.setErrorStr(&enginebuildererrstr);
-      EB.setEngineKind(EngineKind::Kind::Interpreter);
       ExecutionEngine *EE = EB.create();
       if(!EE){
         errs()<<enginebuildererrstr<<"\n";
