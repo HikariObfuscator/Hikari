@@ -81,7 +81,7 @@ if(NOT toolchains_match)
 endif()
 set(toolchains_dir ${CMAKE_MATCH_1})
 
-set(LLVMToolchainDir "${CMAKE_INSTALL_PREFIX}/Toolchains/LLVM${PACKAGE_VERSION}.xctoolchain/")
+set(LLVMToolchainDir "${CMAKE_INSTALL_PREFIX}/Toolchains/Hikari.xctoolchain/")
 
 add_custom_command(OUTPUT ${LLVMToolchainDir}
                     COMMAND ${CMAKE_COMMAND} -E make_directory ${LLVMToolchainDir})
@@ -89,7 +89,7 @@ add_custom_command(OUTPUT ${LLVMToolchainDir}
 add_custom_command(OUTPUT ${LLVMToolchainDir}/Info.plist
                   DEPENDS ${LLVMToolchainDir}
                   COMMAND ${CMAKE_COMMAND} -E remove ${LLVMToolchainDir}/Info.plist
-                  COMMAND /usr/libexec/PlistBuddy -c "Add:CFBundleIdentifier string org.llvm.${PACKAGE_VERSION}" "${LLVMToolchainDir}/Info.plist"
+                  COMMAND /usr/libexec/PlistBuddy -c "Add:CFBundleIdentifier string com.naville.hikari" "${LLVMToolchainDir}/Info.plist"
                   COMMAND /usr/libexec/PlistBuddy -c "Add:CompatibilityVersion integer ${COMPAT_VERSION}" "${LLVMToolchainDir}/Info.plist"
                   )
 

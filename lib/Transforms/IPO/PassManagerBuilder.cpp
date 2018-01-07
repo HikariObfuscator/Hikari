@@ -195,7 +195,7 @@ PassManagerBuilder::PassManagerBuilder() {
   PrepareForThinLTO = EnablePrepareForThinLTO;
   PerformThinLTO = false;
   DivergentTarget = false;
-  if(!AesSeed.empty()) {
+  if (!AesSeed.empty()) {
     llvm::cryptoutils->prng_seed(AesSeed.c_str());
   }
 }
@@ -427,18 +427,6 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
 
 void PassManagerBuilder::populateModulePassManager(
     legacy::PassManagerBase &MPM) {
-  if (EnableAllObfuscation || EnableBogusControlFlow) {
-    MPM.add(createBogusControlFlowPass());
-  }
-  if (EnableAllObfuscation || EnableFlattening) {
-    MPM.add(createFlatteningPass());
-  }
-  if (EnableAllObfuscation || EnableBasicBlockSplit) {
-    MPM.add(createSplitBasicBlockPass());
-  }
-  if (EnableAllObfuscation || EnableSubstitution) {
-    MPM.add(createSubstitutionPass());
-  }
   if (EnableAllObfuscation || EnableAntiDebugging) {
     MPM.add(createAntiDebuggingPass());
   }
@@ -450,6 +438,18 @@ void PassManagerBuilder::populateModulePassManager(
   }
   if (EnableAllObfuscation || EnableStringEncryption) {
     MPM.add(createStringEncryptionPass());
+  }
+  if (EnableAllObfuscation || EnableFlattening) {
+    MPM.add(createFlatteningPass());
+  }
+  if (EnableAllObfuscation || EnableBogusControlFlow) {
+    MPM.add(createBogusControlFlowPass());
+  }
+  if (EnableAllObfuscation || EnableBasicBlockSplit) {
+    MPM.add(createSplitBasicBlockPass());
+  }
+  if (EnableAllObfuscation || EnableSubstitution) {
+    MPM.add(createSubstitutionPass());
   }
   if (!PGOSampleUse.empty()) {
     MPM.add(createPruneEHPass());

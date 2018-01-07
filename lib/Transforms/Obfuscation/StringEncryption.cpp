@@ -100,8 +100,10 @@ struct StringEncryption : public ModulePass {
         }
       }
     }
-    // This removes any GV that is not applicable for encryption
     for (GlobalVariable *GV : rawStrings) {
+      if(GV->getInitializer()->isZeroValue()||GV->getInitializer()->isNullValue()){
+        continue;
+      }
       ConstantDataSequential* CDS=cast<ConstantDataSequential>(GV->getInitializer());
       Type *memberType = CDS->getElementType();
       // Ignore non-IntegerType
@@ -188,6 +190,10 @@ struct StringEncryption : public ModulePass {
     }
     for (GlobalVariable *GV : objCStrings) {
       ConstantStruct* CS=cast<ConstantStruct>(GV->getInitializer());
+      GlobalVariable* DecryptedString=cast<GlobalVariable>(CS->getOperand(2)->stripPointerCasts());
+      if(DecryptedString->getInitializer()->isZeroValue()||DecryptedString->getInitializer()->isNullValue()){
+        continue;
+      }
       AllocaInst *allocatedCFString = IRB.CreateAlloca(
           Func->getParent()->getTypeByName("struct.__NSConstantString_tag"));
       Value *zero =
@@ -201,7 +207,6 @@ struct StringEncryption : public ModulePass {
       IRB.CreateStore(CS->getOperand(0),IRB.CreateGEP(allocatedCFString,{zero,zero}));
       IRB.CreateStore(CS->getOperand(1),IRB.CreateGEP(allocatedCFString,{zero,one}));
       Value* stroffset=IRB.CreateGEP(allocatedCFString,{zero,two});
-      GlobalVariable* DecryptedString=cast<GlobalVariable>(CS->getOperand(2)->stripPointerCasts());
       Value* BCI=IRB.CreateBitCast(encmap[DecryptedString],CS->getOperand(2)->getType());
       IRB.CreateStore(BCI,stroffset);
       IRB.CreateStore(CS->getOperand(3),IRB.CreateGEP(allocatedCFString,{zero,three}));

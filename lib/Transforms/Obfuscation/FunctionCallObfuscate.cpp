@@ -233,8 +233,6 @@ struct FunctionCallObfuscate : public FunctionPass {
               calledFunction->getName().equals("dlsym") ||
               calledFunction->getName().equals("dlopen") ||
               calledFunction->isIntrinsic()) {
-            CS.getCalledValue()->print(errs());
-            errs() << " Not Applicable For FCO\n";
             continue;
           }
           // errs()<<"Searching For:"<<calledFunction->getName()<<" In
