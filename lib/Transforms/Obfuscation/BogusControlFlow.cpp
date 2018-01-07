@@ -127,7 +127,7 @@ STATISTIC(FinalNumBasicBlocks,
           "f. Final number of basic blocks in this module");
 
 // Options for the pass
-const int defaultObfRate = 30, defaultObfTime = 1;
+const int defaultObfRate = 70, defaultObfTime = 1;
 
 static cl::opt<int>
     ObfProbRate("bcf_prob",
@@ -145,7 +145,12 @@ static cl::opt<int>
              ConditionExpressionComplexity("bcf_cond_compl",
                       cl::desc("The complexity of the expression used to generate branching condition"),
                       cl::value_desc("Complexity"), cl::init(5), cl::Optional);
-
+//FIXME: For whatever reason,JIT seems to be broken for our crafted Module while Interpreter works fine.
+//However Interpreter has Huge performance impact
+static cl::opt<EngineKind::Kind> EEModeforEvaluation("bcf_eval_mode",cl::desc("Mode Used For Evaluation Condition."),cl::value_desc("Mode"), cl::init(EngineKind::Interpreter), cl::Optional,cl::values(
+  clEnumVal(EngineKind::Interpreter , "Interpreter"),
+  clEnumVal(EngineKind::JIT, "JIT"),
+  clEnumVal(EngineKind::Either, "Either")));
 static Instruction::BinaryOps ops[] = {
     Instruction::Add,  Instruction::Sub,  Instruction::Mul, Instruction::SDiv,
     Instruction::URem, Instruction::SRem, Instruction::Shl, Instruction::LShr,
@@ -660,14 +665,15 @@ struct BogusControlFlow : public FunctionPass {
           GlobalValue::PrivateLinkage,LHSC,"LHSGV");
       GlobalVariable 	* RHSGV = new GlobalVariable(M, Type::getInt32Ty(M.getContext()), false,
           GlobalValue::PrivateLinkage,RHSC,"RHSGV");
-      GlobalVariable 	* emuLHSGV = new GlobalVariable(emuModule, Type::getInt32Ty(M.getContext()), false,
-              GlobalValue::PrivateLinkage,LHSC,"EmulatorLHSGV");
-      GlobalVariable 	* emuRHSGV = new GlobalVariable(emuModule, Type::getInt32Ty(M.getContext()), false,
-              GlobalValue::PrivateLinkage,RHSC,"EmulatorRHSGV");
+      //GlobalVariable 	* emuLHSGV = new GlobalVariable(emuModule, Type::getInt32Ty(M.getContext()), false,GlobalValue::PrivateLinkage,LHSC,"EmulatorLHSGV");
+      //GlobalVariable 	* emuRHSGV = new GlobalVariable(emuModule, Type::getInt32Ty(M.getContext()), false,GlobalValue::PrivateLinkage,RHSC,"EmulatorRHSGV");
       LoadInst* LHS=IRBReal.CreateLoad(LHSGV,"Initial LHS");
       LoadInst* RHS=IRBReal.CreateLoad(RHSGV,"Initial LHS");
-      LoadInst* emuLHS=IRBEmu.CreateLoad(emuLHSGV,"Initial LHS For Emulation");
-      LoadInst* emuRHS=IRBEmu.CreateLoad(emuRHSGV,"Initial RHS For Emulation");
+      //LoadInst* emuLHS=IRBEmu.CreateLoad(emuLHSGV,"Initial LHS For Emulation");
+      //LoadInst* emuRHS=IRBEmu.CreateLoad(emuRHSGV,"Initial RHS For Emulation");
+      //To Speed-Up Evaluation
+      Value* emuLHS=LHSC;
+      Value* emuRHS=RHSC;
       Instruction::BinaryOps initialOp =
           ops[rand() % (sizeof(ops) / sizeof(ops[0]))];
       Value *emuLast = IRBEmu.CreateBinOp(initialOp, emuLHS, emuRHS,"EmuInitialCondition");
@@ -689,6 +695,7 @@ struct BogusControlFlow : public FunctionPass {
       string enginebuildererrstr;
       EngineBuilder EB(move(emuUP));
       EB.setErrorStr(&enginebuildererrstr);
+      EB.setEngineKind(EEModeforEvaluation);
       ExecutionEngine *EE = EB.create();
       if(!EE){
         errs()<<enginebuildererrstr<<"\n";

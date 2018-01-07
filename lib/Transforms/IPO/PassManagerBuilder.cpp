@@ -142,9 +142,9 @@ static cl::opt<bool>
     EnableGVNSink("enable-gvn-sink", cl::init(false), cl::Hidden,
                   cl::desc("Enable the GVN sinking pass (default = off)"));
 // Begin Obfuscator Options
-static cl::opt<bool>
-    EnableAntiClassDump("enable-acdobf", cl::init(false), cl::NotHidden,
-                            cl::desc("Enable AntiClassDump."));
+static cl::opt<bool> EnableAntiClassDump("enable-acdobf", cl::init(false),
+                                         cl::NotHidden,
+                                         cl::desc("Enable AntiClassDump."));
 static cl::opt<bool>
     EnableBogusControlFlow("enable-bcfobf", cl::init(false), cl::NotHidden,
                            cl::desc("Enable BogusControlFlow."));
@@ -422,18 +422,6 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
 
 void PassManagerBuilder::populateModulePassManager(
     legacy::PassManagerBase &MPM) {
-  if (EnableAllObfuscation || EnableBogusControlFlow) {
-    MPM.add(createBogusControlFlowPass());
-  }
-  if (EnableAllObfuscation || EnableFlattening) {
-    MPM.add(createFlatteningPass());
-  }
-  if (EnableAllObfuscation || EnableBasicBlockSplit) {
-    MPM.add(createSplitBasicBlockPass());
-  }
-  if (EnableAllObfuscation || EnableSubstitution) {
-    MPM.add(createSubstitutionPass());
-  }
   if (EnableAllObfuscation || EnableAntiDebugging) {
     MPM.add(createAntiDebuggingPass());
   }
@@ -445,6 +433,18 @@ void PassManagerBuilder::populateModulePassManager(
   }
   if (EnableAllObfuscation || EnableStringEncryption) {
     MPM.add(createStringEncryptionPass());
+  }
+  if (EnableAllObfuscation || EnableBogusControlFlow) {
+    MPM.add(createBogusControlFlowPass());
+  }
+  if (EnableAllObfuscation || EnableFlattening) {
+    MPM.add(createFlatteningPass());
+  }
+  if (EnableAllObfuscation || EnableBasicBlockSplit) {
+    MPM.add(createSplitBasicBlockPass());
+  }
+  if (EnableAllObfuscation || EnableSubstitution) {
+    MPM.add(createSubstitutionPass());
   }
   if (!PGOSampleUse.empty()) {
     MPM.add(createPruneEHPass());
