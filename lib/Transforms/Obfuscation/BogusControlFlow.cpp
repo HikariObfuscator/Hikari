@@ -643,12 +643,14 @@ struct BogusControlFlow : public FunctionPass {
       emuModule.setTargetTriple(M.getTargetTriple());
       Function *emuFunction =
           Function::Create(FunctionType::get(I32Ty, false),
-                           GlobalValue::LinkageTypes::ExternalLinkage,
+                           GlobalValue::LinkageTypes::PrivateLinkage,
                            "BeginExecution", &emuModule);
       BasicBlock *EntryBlock =
           BasicBlock::Create(M.getContext(), "", emuFunction);
 
       BasicBlock* RealEntryBlock=&((*i)->getFunction()->getEntryBlock());
+      IRBuilder<> IRBReal(RealEntryBlock->getFirstNonPHIOrDbgOrLifetime());
+      IRBuilder<> IRBEmu(EntryBlock);
       // First,Construct a real RHS that will be used in the actual condition
       Constant *RealRHS = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
       // Prepare Initial LHS and RHS to bootstrap the emulator
@@ -659,42 +661,31 @@ struct BogusControlFlow : public FunctionPass {
       GlobalVariable 	* RHSGV = new GlobalVariable(M, Type::getInt32Ty(M.getContext()), false,
           GlobalValue::PrivateLinkage,RHSC,"RHSGV");
       GlobalVariable 	* emuLHSGV = new GlobalVariable(emuModule, Type::getInt32Ty(M.getContext()), false,
-              GlobalValue::CommonLinkage,LHSC,"EmulatorLHSGV");
+              GlobalValue::PrivateLinkage,LHSC,"EmulatorLHSGV");
       GlobalVariable 	* emuRHSGV = new GlobalVariable(emuModule, Type::getInt32Ty(M.getContext()), false,
-              GlobalValue::CommonLinkage,RHSC,"EmulatorRHSGV");
-      LoadInst* LHS=new LoadInst(LHSGV,"Initial LHS",RealEntryBlock->getFirstNonPHIOrDbgOrLifetime());
-      LoadInst* RHS=new LoadInst(RHSGV,"Initial RHS",RealEntryBlock->getFirstNonPHIOrDbgOrLifetime());
-      LoadInst* emuLHS=new LoadInst(emuLHSGV,"Initial LHS For Emulation",EntryBlock);
-      LoadInst* emuRHS=new LoadInst(emuRHSGV,"Initial RHS For Emulation",EntryBlock);
+              GlobalValue::PrivateLinkage,RHSC,"EmulatorRHSGV");
+      LoadInst* LHS=IRBReal.CreateLoad(LHSGV,"Initial LHS");
+      LoadInst* RHS=IRBReal.CreateLoad(RHSGV,"Initial LHS");
+      LoadInst* emuLHS=IRBEmu.CreateLoad(emuLHSGV,"Initial LHS For Emulation");
+      LoadInst* emuRHS=IRBEmu.CreateLoad(emuRHSGV,"Initial RHS For Emulation");
       Instruction::BinaryOps initialOp =
           ops[rand() % (sizeof(ops) / sizeof(ops[0]))];
-      Instruction *emuLast = BinaryOperator::Create(initialOp, emuLHS, emuRHS,"EmuInitialCondition");
-      Instruction *Last = BinaryOperator::Create(initialOp, LHS, RHS,"InitialCondition");
-      emuLast->insertAfter(emuRHS);
-      Last->insertAfter(RHS);
+      Value *emuLast = IRBEmu.CreateBinOp(initialOp, emuLHS, emuRHS,"EmuInitialCondition");
+      Value *Last = IRBReal.CreateBinOp(initialOp, LHS, RHS,"InitialCondition");
       for (int i = 0; i < ConditionExpressionComplexity; i++) {
         Constant *newTmp = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
         Instruction::BinaryOps initialOp =
             ops[rand() % (sizeof(ops) / sizeof(ops[0]))];
-        Instruction* tmp = BinaryOperator::Create(initialOp, Last, newTmp);
-        tmp->insertAfter(Last);
-        Last=tmp;
-        Instruction* emutmp= BinaryOperator::Create(initialOp, emuLast, newTmp);
-        emutmp->insertAfter(emuLast);
-        emuLast=emutmp;
+            emuLast = IRBEmu.CreateBinOp(initialOp, emuLast, newTmp,"EmuInitialCondition");
+            Last = IRBReal.CreateBinOp(initialOp, Last,newTmp,"InitialCondition");
       }
       // Randomly Generate Predicate
       CmpInst::Predicate pred =
           preds[rand() % (sizeof(preds) / sizeof(preds[0]))];
-      Instruction *tmp = new ICmpInst(pred, Last, RealRHS);
-      tmp->insertAfter(Last);
-      Last=tmp;
-      Instruction *emutmp = new ICmpInst(pred, emuLast, RealRHS);
-      emutmp->insertAfter(emuLast);
-      emuLast=emutmp;
+      Last=IRBReal.CreateICmp(pred, Last, RealRHS);
+      emuLast=IRBEmu.CreateICmp(pred, emuLast, RealRHS);
+      IRBEmu.CreateRet(emuLast);
       unique_ptr<Module> emuUP(&emuModule);
-      Instruction* emuReturn=ReturnInst::Create(M.getContext(),emuLast);
-      emuReturn->insertAfter(emuLast);
       string enginebuildererrstr;
       EngineBuilder EB(move(emuUP));
       EB.setErrorStr(&enginebuildererrstr);
