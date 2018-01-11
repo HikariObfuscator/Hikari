@@ -105,12 +105,12 @@
 
 #include "llvm/Transforms/Obfuscation/BogusControlFlow.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/MCJIT.h"
-#include "llvm/ExecutionEngine/Interpreter.h"
-#include "llvm/Support/TargetSelect.h"
 #include "llvm/ExecutionEngine/GenericValue.h"
+#include "llvm/ExecutionEngine/Interpreter.h"
+#include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/NoFolder.h"
+#include "llvm/Support/TargetSelect.h"
 #include "llvm/Transforms/Obfuscation/Utils.h"
 #include <memory>
 
@@ -141,18 +141,23 @@ static cl::opt<int>
              cl::desc("Choose how many time the -bcf pass loop on a function"),
              cl::value_desc("number of times"), cl::init(defaultObfTime),
              cl::Optional);
-static cl::opt<int>
-             ConditionExpressionComplexity("bcf_cond_compl",
-                      cl::desc("The complexity of the expression used to generate branching condition"),
-                      cl::value_desc("Complexity"), cl::init(3), cl::Optional);
-//FIXME: For whatever reason,JIT seems to be broken for our crafted Module while Interpreter works fine.
-//However Interpreter has Huge performance impact
-static cl::opt<EngineKind::Kind> EEModeforEvaluation("bcf_eval_mode",cl::desc("Mode Used For Evaluation Condition."),cl::value_desc("Mode"), cl::init(EngineKind::Interpreter), cl::Optional,cl::values(
-  clEnumVal(EngineKind::Interpreter , "Interpreter"),
-  clEnumVal(EngineKind::JIT, "JIT"),
-  clEnumVal(EngineKind::Either, "Either")));
-static Instruction::BinaryOps ops[] = {
-    Instruction::Add,  Instruction::Sub,Instruction::And,  Instruction::Or,  Instruction::Xor};
+static cl::opt<int> ConditionExpressionComplexity(
+    "bcf_cond_compl",
+    cl::desc("The complexity of the expression used to generate branching "
+             "condition"),
+    cl::value_desc("Complexity"), cl::init(3), cl::Optional);
+// FIXME: For whatever reason,JIT seems to be broken for our crafted Module
+// while Interpreter works fine.  However Interpreter has Huge performance
+// impact
+static cl::opt<EngineKind::Kind> EEModeforEvaluation(
+    "bcf_eval_mode", cl::desc("Mode Used For Evaluation Condition."),
+    cl::value_desc("Mode"), cl::init(EngineKind::Interpreter), cl::Optional,
+    cl::values(clEnumVal(EngineKind::Interpreter, "Interpreter"),
+               clEnumVal(EngineKind::JIT, "JIT"),
+               clEnumVal(EngineKind::Either, "Either")));
+static Instruction::BinaryOps ops[] = {Instruction::Add, Instruction::Sub,
+                                       Instruction::And, Instruction::Or,
+                                       Instruction::Xor};
 static CmpInst::Predicate preds[] = {CmpInst::ICMP_EQ,  CmpInst::ICMP_NE,
                                      CmpInst::ICMP_UGT, CmpInst::ICMP_UGE,
                                      CmpInst::ICMP_ULT, CmpInst::ICMP_ULE};
@@ -160,7 +165,7 @@ namespace {
 struct BogusControlFlow : public FunctionPass {
   static char ID; // Pass identification
   BogusControlFlow() : FunctionPass(ID) {}
-  bool doInitialization(Module &M) override{
+  bool doInitialization(Module &M) override {
     InitializeAllTargets();
     return false;
   }
@@ -362,29 +367,25 @@ struct BogusControlFlow : public FunctionPass {
     Twine *var6 = new Twine("condition2");
     FCmpInst *condition2 =
         new FCmpInst(*originalBB, CmpInst::FCMP_TRUE, LHS, RHS, *var6);
-    //BranchInst::Create(originalBBpart2, alteredBB, (Value *)condition2,originalBB);
-    //Do random behavior to avoid pattern recognition
-    //This is achieved by jumping to a random BB
-    switch (llvm::cryptoutils->get_uint16_t()%3){
-      case 0:{
-        BranchInst::Create(originalBBpart2,originalBB);
-        break;
-      }
-      case 1:{
-        BranchInst::Create(originalBBpart2,originalBBpart2, (Value *)condition2,
+    // BranchInst::Create(originalBBpart2, alteredBB, (Value
+    // *)condition2,originalBB);  Do random behavior to avoid pattern
+    // recognition This is achieved by jumping to a random BB
+    switch (llvm::cryptoutils->get_uint16_t() % 2) {
+    case 0: {
+      BranchInst::Create(originalBBpart2, originalBB,condition2,
                          originalBB);
-        break;
-      }
-      case 2:{
-        BranchInst::Create(originalBBpart2,alteredBB, (Value *)condition2,
+      break;
+    }
+    case 1: {
+      BranchInst::Create(originalBBpart2, alteredBB,condition2,
                          originalBB);
-        break;
-      }
-      default:{
-        BranchInst::Create(originalBBpart2,originalBB);
-        break;
-      }
-
+      break;
+    }
+    default: {
+      BranchInst::Create(originalBBpart2, originalBB,condition2,
+                         originalBB);
+      break;
+    }
     }
     DEBUG_WITH_TYPE("gen", errs()
                                << "bcf: Terminator original basic block: ok\n");
@@ -673,39 +674,45 @@ struct BogusControlFlow : public FunctionPass {
       BasicBlock *EntryBlock =
           BasicBlock::Create(M.getContext(), "", emuFunction);
 
-      BasicBlock* RealEntryBlock=&((*i)->getFunction()->getEntryBlock());
-      IRBuilder<> IRBReal(RealEntryBlock->getFirstNonPHIOrDbgOrLifetime());
+      // BasicBlock* RealEntryBlock=&((*i)->getFunction()->getEntryBlock());
+      IRBuilder<> IRBReal(*i);
       IRBuilder<> IRBEmu(EntryBlock);
       // First,Construct a real RHS that will be used in the actual condition
       Constant *RealRHS = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
       // Prepare Initial LHS and RHS to bootstrap the emulator
       Constant *LHSC = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
       Constant *RHSC = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
-      GlobalVariable 	* LHSGV = new GlobalVariable(M, Type::getInt32Ty(M.getContext()), false,
-          GlobalValue::PrivateLinkage,LHSC,"LHSGV");
-      GlobalVariable 	* RHSGV = new GlobalVariable(M, Type::getInt32Ty(M.getContext()), false,
-          GlobalValue::PrivateLinkage,RHSC,"RHSGV");
-      LoadInst* LHS=IRBReal.CreateLoad(LHSGV,"Initial LHS");
-      LoadInst* RHS=IRBReal.CreateLoad(RHSGV,"Initial LHS");
-      //To Speed-Up Evaluation
-      Value* emuLHS=LHSC;
-      Value* emuRHS=RHSC;
-      Instruction::BinaryOps initialOp =
-          ops[llvm::cryptoutils->get_uint32_t() % (sizeof(ops) / sizeof(ops[0]))];
-      Value *emuLast = IRBEmu.CreateBinOp(initialOp, emuLHS, emuRHS,"EmuInitialCondition");
-      Value *Last = IRBReal.CreateBinOp(initialOp, LHS, RHS,"InitialCondition");
+      GlobalVariable *LHSGV =
+          new GlobalVariable(M, Type::getInt32Ty(M.getContext()), false,
+                             GlobalValue::PrivateLinkage, LHSC, "LHSGV");
+      GlobalVariable *RHSGV =
+          new GlobalVariable(M, Type::getInt32Ty(M.getContext()), false,
+                             GlobalValue::PrivateLinkage, RHSC, "RHSGV");
+      LoadInst *LHS = IRBReal.CreateLoad(LHSGV, "Initial LHS");
+      LoadInst *RHS = IRBReal.CreateLoad(RHSGV, "Initial LHS");
+      // To Speed-Up Evaluation
+      Value *emuLHS = LHSC;
+      Value *emuRHS = RHSC;
+      Instruction::BinaryOps initialOp = ops[llvm::cryptoutils->get_uint32_t() %
+                                             (sizeof(ops) / sizeof(ops[0]))];
+      Value *emuLast =
+          IRBEmu.CreateBinOp(initialOp, emuLHS, emuRHS, "EmuInitialCondition");
+      Value *Last =
+          IRBReal.CreateBinOp(initialOp, LHS, RHS, "InitialCondition");
       for (int i = 0; i < ConditionExpressionComplexity; i++) {
         Constant *newTmp = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
         Instruction::BinaryOps initialOp =
-            ops[llvm::cryptoutils->get_uint32_t() % (sizeof(ops) / sizeof(ops[0]))];
-            emuLast = IRBEmu.CreateBinOp(initialOp, emuLast, newTmp,"EmuInitialCondition");
-            Last = IRBReal.CreateBinOp(initialOp, Last,newTmp,"InitialCondition");
+            ops[llvm::cryptoutils->get_uint32_t() %
+                (sizeof(ops) / sizeof(ops[0]))];
+        emuLast = IRBEmu.CreateBinOp(initialOp, emuLast, newTmp,
+                                     "EmuInitialCondition");
+        Last = IRBReal.CreateBinOp(initialOp, Last, newTmp, "InitialCondition");
       }
       // Randomly Generate Predicate
-      CmpInst::Predicate pred =
-          preds[llvm::cryptoutils->get_uint32_t() % (sizeof(preds) / sizeof(preds[0]))];
-      Last=IRBReal.CreateICmp(pred, Last, RealRHS);
-      emuLast=IRBEmu.CreateICmp(pred, emuLast, RealRHS);
+      CmpInst::Predicate pred = preds[llvm::cryptoutils->get_uint32_t() %
+                                      (sizeof(preds) / sizeof(preds[0]))];
+      Last = IRBReal.CreateICmp(pred, Last, RealRHS);
+      emuLast = IRBEmu.CreateICmp(pred, emuLast, RealRHS);
       IRBEmu.CreateRet(emuLast);
       unique_ptr<Module> emuUP(&emuModule);
       string enginebuildererrstr;
@@ -713,24 +720,25 @@ struct BogusControlFlow : public FunctionPass {
       EB.setErrorStr(&enginebuildererrstr);
       EB.setEngineKind(EEModeforEvaluation);
       ExecutionEngine *EE = EB.create();
-      if(!EE){
-        errs()<<enginebuildererrstr<<"\n";
+      if (!EE) {
+        errs() << enginebuildererrstr << "\n";
         abort();
       }
       GenericValue GV = EE->runFunction(emuFunction, ArrayRef<GenericValue>());
       uint64_t emulateResult = GV.IntVal.getLimitedValue();
-      if (emulateResult==1) {
+      vector<BasicBlock *> BBs; // Start To Prepare IndirectBranching
+      if (emulateResult == 1) {
         // Our ConstantExpr evaluates to true;
-        BranchInst*BI=BranchInst::Create(((BranchInst *)*i)->getSuccessor(0),
+
+        BranchInst::Create(((BranchInst *)*i)->getSuccessor(0),
                            ((BranchInst *)*i)->getSuccessor(1), (Value *)Last,
                            ((BranchInst *)*i)->getParent());
-        DEBUG_WITH_TYPE("gen", errs()<<(*i)->getFunction()->getName()<<" Always True:\n"<<*BI<<"\n");
       } else {
         // False, swap operands
-        BranchInst* BI=BranchInst::Create(((BranchInst *)*i)->getSuccessor(1),
+
+        BranchInst::Create(((BranchInst *)*i)->getSuccessor(1),
                            ((BranchInst *)*i)->getSuccessor(0), (Value *)Last,
                            ((BranchInst *)*i)->getParent());
-        DEBUG_WITH_TYPE("gen", errs()<<(*i)->getFunction()->getName()<<" Always False:\n"<<*BI<<"\n");
       }
       EntryBlock->eraseFromParent();
       emuFunction->eraseFromParent();
@@ -761,5 +769,6 @@ struct BogusControlFlow : public FunctionPass {
 } // namespace
 
 char BogusControlFlow::ID = 0;
-INITIALIZE_PASS(BogusControlFlow, "bcfobf", "Enable BogusControlFlow.",true,true)
-Pass * llvm::createBogusControlFlowPass() { return new BogusControlFlow(); }
+INITIALIZE_PASS(BogusControlFlow, "bcfobf", "Enable BogusControlFlow.", true,
+                true)
+Pass *llvm::createBogusControlFlowPass() { return new BogusControlFlow(); }
