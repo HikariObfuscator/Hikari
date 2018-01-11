@@ -135,7 +135,7 @@ struct AntiClassDump : public ModulePass {
       // No ObjC class found.
       return false;
     }
-    // Create our own Initializer
+    /*// Create our own Initializer
     FunctionType *InitializerType = FunctionType::get(
         Type::getVoidTy(M.getContext()), ArrayRef<Type *>(), false);
     Function *Initializer = Function::Create(
@@ -143,7 +143,7 @@ struct AntiClassDump : public ModulePass {
     BasicBlock *EntryBB = BasicBlock::Create(M.getContext(), "", Initializer);
     //
     IRBuilder<> IRB(EntryBB);
-    IRB.CreateRetVoid();
+    IRB.CreateRetVoid();*/
     assert(OLCGV->hasInitializer() &&
            "OBJC_LABEL_CLASS_$ Doesn't Have Initializer.");
     ConstantArray *OBJC_LABEL_CLASS_CDS =
@@ -212,7 +212,7 @@ struct AntiClassDump : public ModulePass {
 
     // Now run handleClass for each class
     for (string className : readyclses) {
-      handleClass(GVMapping[className], EntryBB);
+      handleClass(GVMapping[className],&M);
     }
     return true;
   } // runOnModule
@@ -253,8 +253,7 @@ struct AntiClassDump : public ModulePass {
     }
     return info;
   } // splitclass_ro_t
-  void handleClass(GlobalVariable *GV, BasicBlock *BB) {
-
+  void handleClass(GlobalVariable *GV,Module* M) {
     assert(GV->hasInitializer() &&
            "ObjC Class Structure's Initializer Missing");
     ConstantStruct *CS = dyn_cast<ConstantStruct>(GV->getInitializer());
@@ -264,7 +263,6 @@ struct AntiClassDump : public ModulePass {
     SuperClassName = SuperClassName.substr(strlen("OBJC_CLASS_$_"));
     errs() << "Handling Class:" << ClassName
            << " With SuperClass:" << SuperClassName << "\n";
-    Module *M = BB->getModule();
 
     // Let's extract stuffs
     // struct _class_t {
@@ -318,7 +316,7 @@ struct AntiClassDump : public ModulePass {
       FunctionType *InitializerType = FunctionType::get(
           Type::getVoidTy(M->getContext()), ArrayRef<Type *>(), false);
       Function *Initializer = Function::Create(
-          InitializerType, GlobalValue::LinkageTypes::PrivateLinkage, "", M);
+          InitializerType, GlobalValue::LinkageTypes::PrivateLinkage, "AntiClassDumpInitializer", M);
       EntryBB = BasicBlock::Create(M->getContext(), "", Initializer);
     }
     if (NeedTerminator) {

@@ -32,31 +32,22 @@ struct StringEncryption : public ModulePass {
   StringRef getPassName() const override {
     return StringRef("StringEncryption");
   }
-  bool doInitialization(Module &M)override{
-    for(auto I=M.begin();I!=M.end();I++){
-      Function *F=&(*I);
-      if(!F->isDeclaration()){
-        Constant* S=ConstantInt::get(Type::getInt32Ty(M.getContext()),0);
-        GlobalVariable *GV=new GlobalVariable(M,S->getType(),false,GlobalValue::LinkageTypes::PrivateLinkage,S,F->getName()+"StringEncryptionStatus");
-        encstatus[F]=GV;
-      }
-    }
-    return true;
-  }
   bool runOnModule(Module &M) override {
     // in runOnModule. We simple iterate function list and dispatch functions
     // to handlers
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
-      Function &F = *iter;
-      HandleFunction(&F);
+      Function *F=&(*iter);
+
+      if(!F->isDeclaration()){
+        Constant* S=ConstantInt::get(Type::getInt32Ty(M.getContext()),0);
+        GlobalVariable *GV=new GlobalVariable(M,S->getType(),false,GlobalValue::LinkageTypes::PrivateLinkage,S,F->getName()+"StringEncryptionStatus");
+        encstatus[F]=GV;
+        HandleFunction(F);
+      }
     }
     return true;
   } // End runOnModule
   void FixFunctionConstantExpr(Function *Func) {
-
-    if (Func->isDeclaration()) {
-      return;
-    }
     IRBuilder<> IRB(Func->getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
     set<GlobalVariable *> Globals;
     set<User *> Users;
@@ -83,9 +74,6 @@ struct StringEncryption : public ModulePass {
               |
               C
     */
-    if (Func->isDeclaration()) {
-      return;
-    }
     FixFunctionConstantExpr(Func);
     BasicBlock *A=&(Func->getEntryBlock());
     BasicBlock *C=A->splitBasicBlock(A->getFirstNonPHIOrDbgOrLifetime());
@@ -208,12 +196,17 @@ struct StringEncryption : public ModulePass {
     }
     //Now prepare ObjC new GV
     for(GlobalVariable* GV:objCStrings){
+      Value *zero =ConstantInt::get(Type::getInt32Ty(GV->getContext()), 0);
       ConstantStruct* CS=cast<ConstantStruct>(GV->getInitializer());
       vector<Constant*> vals;
       vals.push_back(CS->getOperand(0));
       vals.push_back(CS->getOperand(1));
       GlobalVariable* oldrawString=cast<GlobalVariable>(CS->getOperand(2)->stripPointerCasts());
-      vals.push_back(ConstantExpr::getBitCast(old2new[oldrawString],CS->getOperand(2)->getType()));
+      if(old2new.find(oldrawString)==old2new.end()){//Filter out zero initializers
+        continue;
+      }
+      Constant *GEPed=ConstantExpr::getInBoundsGetElementPtr(nullptr,old2new[oldrawString],{zero,zero});
+      vals.push_back(GEPed);
       vals.push_back(CS->getOperand(3));
       Constant* newCS=ConstantStruct::get(CS->getType(),ArrayRef<Constant*>(vals));
       GlobalVariable *EncryptedOCGV=new GlobalVariable(*(GV->getParent()),newCS->getType(),false,GV->getLinkage(),newCS,"EncryptedObjCString",nullptr,GV->getThreadLocalMode(),GV->getType()->getAddressSpace());

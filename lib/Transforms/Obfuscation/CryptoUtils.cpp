@@ -712,7 +712,6 @@ uint8_t CryptoUtils::get_uint8_t() {
   statsGetUint8++;
 
   get_bytes(&ret, 1);
-
   return (uint8_t)ret;
 }
 uint16_t CryptoUtils::get_uint16_t() {
