@@ -228,7 +228,6 @@ struct StringEncryption : public ModulePass {
         GV->eraseFromParent();
       }
     }
-    //FIXME: Replace uses
   } // End of HandleFunction
 };
 Pass *createStringEncryptionPass() { return new StringEncryption(); }

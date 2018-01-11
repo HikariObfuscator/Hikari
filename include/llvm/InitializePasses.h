@@ -391,7 +391,7 @@ void initializeSplitBasicBlockPass(PassRegistry &);
 void initializeSubstitutionPass(PassRegistry &);
 void initializeAntiDebuggingPass(PassRegistry &);
 void initializeSymbolObfuscationPass(PassRegistry &);
-
+void initializeIndirectBranchPass(PassRegistry &);
 } // end namespace llvm
 
 #endif // LLVM_INITIALIZEPASSES_H

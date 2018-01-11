@@ -12,8 +12,6 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/Obfuscation/SymbolObfuscation.h"
 #include "llvm/Support/CommandLine.h"
 #include <string>

@@ -232,6 +232,7 @@ namespace {
       (void) llvm::createSubstitutionPass();
       (void) llvm::createAntiDebuggingPass();
       (void) llvm::createSymbolObfuscationPass();
+      (void) llvm::createIndirectBranchPass();
     }
   } ForcePassLinking; // Force link by creating a global definition.
 }

@@ -161,7 +161,7 @@ static cl::opt<bool>
                        cl::desc("Enable Instruction Substitution."));
 static cl::opt<bool> EnableAllObfuscation(
     "enable-allobf", cl::init(false), cl::NotHidden,
-    cl::desc("Enable All Obfuscation.(Except LTO Passes)"));
+    cl::desc("Enable All Obfuscation."));
 static cl::opt<bool> EnableAntiDebugging("enable-adb", cl::init(false),
                                          cl::NotHidden,
                                          cl::desc("Enable AntiDebugging."));
@@ -174,6 +174,10 @@ static cl::opt<bool>
 static cl::opt<bool>
     EnableSymbolObfuscation("enable-symobf", cl::init(false), cl::NotHidden,
                             cl::desc("Enable Symbol Obfuscation."));
+static cl::opt<bool>
+    EnableIndirectBranching("enable-indibran", cl::init(false), cl::NotHidden,
+                            cl::desc("Enable Indirect Branching."));
+//End Obfuscator Options
 PassManagerBuilder::PassManagerBuilder() {
   OptLevel = 2;
   SizeLevel = 0;
@@ -442,14 +446,17 @@ void PassManagerBuilder::populateModulePassManager(
   if (EnableAllObfuscation || EnableFlattening) {
     MPM.add(createFlatteningPass());
   }
-  if (EnableAllObfuscation || EnableBogusControlFlow) {
-    MPM.add(createBogusControlFlowPass());
-  }
   if (EnableAllObfuscation || EnableBasicBlockSplit) {
     MPM.add(createSplitBasicBlockPass());
   }
+  if (EnableAllObfuscation || EnableBogusControlFlow) {
+    MPM.add(createBogusControlFlowPass());
+  }
   if (EnableAllObfuscation || EnableSubstitution) {
     MPM.add(createSubstitutionPass());
+  }
+  if(EnableAllObfuscation || EnableIndirectBranching){
+    MPM.add(createIndirectBranchPass());
   }
   if (!PGOSampleUse.empty()) {
     MPM.add(createPruneEHPass());
