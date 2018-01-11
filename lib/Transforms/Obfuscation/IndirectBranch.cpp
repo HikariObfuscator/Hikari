@@ -36,6 +36,9 @@ struct IndirectBranch : public FunctionPass {
       if (BI->isConditional()) {
         BBs.push_back(BI->getSuccessor(1));
       }
+      else{
+        BBs.push_back(BI->getParent());
+      }
       BBs.push_back(BI->getSuccessor(0));
       ArrayType *AT = ArrayType::get(
           Type::getInt8PtrTy(Func.getParent()->getContext()), BBs.size());
