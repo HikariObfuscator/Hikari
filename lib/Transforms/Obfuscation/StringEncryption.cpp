@@ -206,7 +206,13 @@ struct StringEncryption : public ModulePass {
         continue;
       }
       Constant *GEPed=ConstantExpr::getInBoundsGetElementPtr(nullptr,old2new[oldrawString],{zero,zero});
-      vals.push_back(GEPed);
+      if(GEPed->getType()==CS->getOperand(2)->getType()){
+        vals.push_back(GEPed);
+      }
+      else{
+        Constant *BitCasted=ConstantExpr::getBitCast(old2new[oldrawString],CS->getOperand(2)->getType());
+        vals.push_back(BitCasted);
+      }
       vals.push_back(CS->getOperand(3));
       Constant* newCS=ConstantStruct::get(CS->getType(),ArrayRef<Constant*>(vals));
       GlobalVariable *EncryptedOCGV=new GlobalVariable(*(GV->getParent()),newCS->getType(),false,GV->getLinkage(),newCS,"EncryptedObjCString",nullptr,GV->getThreadLocalMode(),GV->getType()->getAddressSpace());
