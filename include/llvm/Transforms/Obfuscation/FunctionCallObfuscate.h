@@ -7,7 +7,7 @@ using namespace llvm;
 
 // Namespace
 namespace llvm {
-	Pass* createFunctionCallObfuscatePass();
+	FunctionPass* createFunctionCallObfuscatePass();
 	void initializeFunctionCallObfuscatePass(PassRegistry &Registry);
 }
 #endif

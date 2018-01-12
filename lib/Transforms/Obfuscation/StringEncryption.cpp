@@ -275,7 +275,7 @@ struct StringEncryption : public ModulePass {
     return false;
   }
 };
-Pass *createStringEncryptionPass() { return new StringEncryption(); }
+ModulePass *createStringEncryptionPass() { return new StringEncryption(); }
 } // namespace llvm
 
 char StringEncryption::ID = 0;

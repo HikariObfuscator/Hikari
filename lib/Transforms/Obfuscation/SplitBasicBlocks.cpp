@@ -42,7 +42,7 @@ struct SplitBasicBlock : public FunctionPass {
 
 char SplitBasicBlock::ID = 0;
 INITIALIZE_PASS(SplitBasicBlock, "splitobf", "Enable BasicBlockSpliting.",true, true)
-Pass *llvm::createSplitBasicBlockPass() {
+FunctionPass *llvm::createSplitBasicBlockPass() {
   return new SplitBasicBlock();
 }
 

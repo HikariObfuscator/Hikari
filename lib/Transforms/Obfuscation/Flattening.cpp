@@ -32,7 +32,7 @@ struct Flattening : public FunctionPass {
 }
 
 char Flattening::ID = 0;
-Pass *llvm::createFlatteningPass() { return new Flattening(); }
+FunctionPass *llvm::createFlatteningPass() { return new Flattening(); }
 INITIALIZE_PASS(Flattening, "cffobf", "Enable Control Flow Flattening.",
                       true, true)
 bool Flattening::runOnFunction(Function &F) {

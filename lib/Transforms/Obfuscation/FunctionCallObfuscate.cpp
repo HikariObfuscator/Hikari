@@ -277,9 +277,7 @@ struct FunctionCallObfuscate : public FunctionPass {
     return true;
   }
 };
-Pass *createFunctionCallObfuscatePass() { return new FunctionCallObfuscate(); }
+FunctionPass *createFunctionCallObfuscatePass() { return new FunctionCallObfuscate(); }
 } // namespace llvm
 char FunctionCallObfuscate::ID = 0;
-INITIALIZE_PASS_BEGIN(FunctionCallObfuscate, "fcoobf", "Enable Function CallSite Obfuscation.",true,true)
-INITIALIZE_PASS_DEPENDENCY(AntiClassDump)
-INITIALIZE_PASS_END(FunctionCallObfuscate, "fcoobf", "Enable Function CallSite Obfuscation.",true,true)
+INITIALIZE_PASS(FunctionCallObfuscate, "fcoobf", "Enable Function CallSite Obfuscation.",true,true)

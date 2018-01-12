@@ -10,4 +10,13 @@
 #include "llvm/Transforms/Obfuscation/SymbolObfuscation.h"
 #include "llvm/Transforms/Obfuscation/Split.h"
 #include "llvm/Transforms/Obfuscation/IndirectBranch.h"
+using namespace std;
+using namespace llvm;
+
+// Namespace
+namespace llvm {
+	ModulePass* createObfuscationPass();
+	void initializeObfuscationPass(PassRegistry &Registry);
+}
+
 #endif

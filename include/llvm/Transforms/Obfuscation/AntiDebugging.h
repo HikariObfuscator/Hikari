@@ -6,7 +6,7 @@ using namespace llvm;
 
 // Namespace
 namespace llvm {
-	Pass* createAntiDebuggingPass();
+	FunctionPass* createAntiDebuggingPass();
 	void initializeAntiDebuggingPass(PassRegistry &Registry);
 }
 #endif

@@ -99,7 +99,7 @@ struct Substitution : public FunctionPass {
 
 char Substitution::ID = 0;
 INITIALIZE_PASS(Substitution, "subobf", "Enable Instruction Substitution.",true, true)
-Pass *llvm::createSubstitutionPass() { return new Substitution(); }
+FunctionPass *llvm::createSubstitutionPass() { return new Substitution(); }
 bool Substitution::runOnFunction(Function &F) {
    // Check if the percentage is correct
    if (ObfTimes <= 0) {

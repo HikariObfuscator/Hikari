@@ -31,7 +31,7 @@
 using namespace std;
 
 namespace llvm {
-	Pass *createFlatteningPass();
+	FunctionPass *createFlatteningPass();
 	void initializeFlatteningPass(PassRegistry &Registry);
 
 }

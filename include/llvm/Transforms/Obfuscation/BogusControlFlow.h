@@ -42,7 +42,7 @@ using namespace llvm;
 
 // Namespace
 namespace llvm {
-	Pass *createBogusControlFlowPass();
+	FunctionPass *createBogusControlFlowPass();
 	void initializeBogusControlFlowPass(PassRegistry &Registry);
 }
 #endif

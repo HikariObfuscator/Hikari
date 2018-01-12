@@ -141,43 +141,9 @@ static cl::opt<bool>
 static cl::opt<bool>
     EnableGVNSink("enable-gvn-sink", cl::init(false), cl::Hidden,
                   cl::desc("Enable the GVN sinking pass (default = off)"));
-// Begin Obfuscator Options
-static cl::opt<std::string> AesSeed("aesSeed", cl::init(""),
-                                    cl::desc("seed for the AES-CTR PRNG"));
-static cl::opt<bool> EnableAntiClassDump("enable-acdobf", cl::init(false),
-                                         cl::NotHidden,
-                                         cl::desc("Enable AntiClassDump."));
-static cl::opt<bool>
-    EnableBogusControlFlow("enable-bcfobf", cl::init(false), cl::NotHidden,
-                           cl::desc("Enable BogusControlFlow."));
-static cl::opt<bool> EnableFlattening("enable-cffobf", cl::init(false),
-                                      cl::NotHidden,
-                                      cl::desc("Enable Flattening."));
-static cl::opt<bool>
-    EnableBasicBlockSplit("enable-splitobf", cl::init(false), cl::NotHidden,
-                          cl::desc("Enable BasicBlockSpliting."));
-static cl::opt<bool>
-    EnableSubstitution("enable-subobf", cl::init(false), cl::NotHidden,
-                       cl::desc("Enable Instruction Substitution."));
-static cl::opt<bool> EnableAllObfuscation(
-    "enable-allobf", cl::init(false), cl::NotHidden,
-    cl::desc("Enable All Obfuscation."));
-static cl::opt<bool> EnableAntiDebugging("enable-adb", cl::init(false),
-                                         cl::NotHidden,
-                                         cl::desc("Enable AntiDebugging."));
-static cl::opt<bool> EnableFunctionCallObfuscate(
-    "enable-fco", cl::init(false), cl::NotHidden,
-    cl::desc("Enable Function CallSite Obfuscation."));
-static cl::opt<bool>
-    EnableStringEncryption("enable-strcry", cl::init(false), cl::NotHidden,
-                           cl::desc("Enable Function CallSite Obfuscation."));
 static cl::opt<bool>
     EnableSymbolObfuscation("enable-symobf", cl::init(false), cl::NotHidden,
-                            cl::desc("Enable Symbol Obfuscation."));
-static cl::opt<bool>
-    EnableIndirectBranching("enable-indibran", cl::init(false), cl::NotHidden,
-                            cl::desc("Enable Indirect Branching."));
-//End Obfuscator Options
+                  cl::desc("Enable Symbol Obfuscation."));
 PassManagerBuilder::PassManagerBuilder() {
   OptLevel = 2;
   SizeLevel = 0;
@@ -199,9 +165,6 @@ PassManagerBuilder::PassManagerBuilder() {
   PrepareForThinLTO = EnablePrepareForThinLTO;
   PerformThinLTO = false;
   DivergentTarget = false;
-  if (!AesSeed.empty()) {
-    llvm::cryptoutils->prng_seed(AesSeed.c_str());
-  }
 }
 
 PassManagerBuilder::~PassManagerBuilder() {
@@ -431,33 +394,7 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
 
 void PassManagerBuilder::populateModulePassManager(
     legacy::PassManagerBase &MPM) {
-  if (EnableAllObfuscation || EnableAntiDebugging) {
-    MPM.add(createAntiDebuggingPass());
-  }
-  if (EnableAllObfuscation || EnableAntiClassDump) {
-    MPM.add(createAntiClassDumpPass());
-  }
-  if (EnableAllObfuscation || EnableFunctionCallObfuscate) {
-    MPM.add(createFunctionCallObfuscatePass());
-  }
-  if (EnableAllObfuscation || EnableStringEncryption) {
-    MPM.add(createStringEncryptionPass());
-  }
-  if (EnableAllObfuscation || EnableFlattening) {
-    MPM.add(createFlatteningPass());
-  }
-  if (EnableAllObfuscation || EnableBasicBlockSplit) {
-    MPM.add(createSplitBasicBlockPass());
-  }
-  if (EnableAllObfuscation || EnableBogusControlFlow) {
-    MPM.add(createBogusControlFlowPass());
-  }
-  if (EnableAllObfuscation || EnableSubstitution) {
-    MPM.add(createSubstitutionPass());
-  }
-  if(EnableAllObfuscation || EnableIndirectBranching){
-    MPM.add(createIndirectBranchPass());
-  }
+    MPM.add(createObfuscationPass());
   if (!PGOSampleUse.empty()) {
     MPM.add(createPruneEHPass());
     MPM.add(createSampleProfileLoaderPass(PGOSampleUse));
@@ -990,7 +927,7 @@ void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
 
   if (VerifyOutput)
     PM.add(createVerifierPass());
-  if (EnableSymbolObfuscation || EnableAllObfuscation) {
+  if (EnableSymbolObfuscation) {
     PM.add(createSymbolObfuscationPass());
   }
 }

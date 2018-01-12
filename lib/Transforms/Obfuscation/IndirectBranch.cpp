@@ -68,6 +68,6 @@ struct IndirectBranch : public FunctionPass {
   }
 };
 } // namespace llvm
-Pass *llvm::createIndirectBranchPass() { return new IndirectBranch(); }
+FunctionPass *llvm::createIndirectBranchPass() { return new IndirectBranch(); }
 char IndirectBranch::ID = 0;
 INITIALIZE_PASS(IndirectBranch, "indibran", "IndirectBranching", true, true)

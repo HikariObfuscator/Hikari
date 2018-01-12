@@ -771,4 +771,4 @@ struct BogusControlFlow : public FunctionPass {
 char BogusControlFlow::ID = 0;
 INITIALIZE_PASS(BogusControlFlow, "bcfobf", "Enable BogusControlFlow.", true,
                 true)
-Pass *llvm::createBogusControlFlowPass() { return new BogusControlFlow(); }
+FunctionPass *llvm::createBogusControlFlowPass() { return new BogusControlFlow(); }

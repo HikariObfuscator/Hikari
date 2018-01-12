@@ -7,7 +7,7 @@ using namespace llvm;
 
 // Namespace
 namespace llvm {
-	Pass *createSymbolObfuscationPass();
+	ModulePass *createSymbolObfuscationPass();
 	void initializeSymbolObfuscationPass(PassRegistry &Registry);
 }
 #endif

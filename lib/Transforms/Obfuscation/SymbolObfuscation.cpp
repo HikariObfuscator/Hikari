@@ -54,7 +54,7 @@ namespace llvm{
     }
   };
 }
-Pass *llvm::createSymbolObfuscationPass(){
+ModulePass *llvm::createSymbolObfuscationPass(){
   return new SymbolObfuscation();
 }
 char SymbolObfuscation::ID = 0;

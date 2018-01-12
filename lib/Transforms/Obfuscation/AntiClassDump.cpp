@@ -737,7 +737,7 @@ struct AntiClassDump : public ModulePass {
   }
 };
 } // namespace llvm
-Pass * llvm::createAntiClassDumpPass() { return new AntiClassDump(); }
+ModulePass * llvm::createAntiClassDumpPass() { return new AntiClassDump(); }
 char AntiClassDump::ID = 0;
 INITIALIZE_PASS(AntiClassDump, "acd", "Enable Anti-ClassDump.",
                       true, true)

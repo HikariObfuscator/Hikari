@@ -30,7 +30,7 @@ using namespace llvm;
 using namespace std;
 
 namespace llvm {
-	Pass *createSubstitutionPass();
+	FunctionPass *createSubstitutionPass();
 	void initializeSubstitutionPass(PassRegistry &Registry);
 }
 

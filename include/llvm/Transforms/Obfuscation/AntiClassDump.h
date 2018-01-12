@@ -7,7 +7,7 @@ using namespace llvm;
 
 // Namespace
 namespace llvm {
-	Pass* createAntiClassDumpPass();
+	ModulePass* createAntiClassDumpPass();
 	void initializeAntiClassDumpPass(PassRegistry &Registry);
 }
 #endif

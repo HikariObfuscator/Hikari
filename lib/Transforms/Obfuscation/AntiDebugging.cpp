@@ -56,7 +56,7 @@ namespace llvm{
       return true;
     }
   };
-  Pass* createAntiDebuggingPass(){
+  FunctionPass* createAntiDebuggingPass(){
     return new AntiDebugging();
   }
 }

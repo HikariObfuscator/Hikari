@@ -8,7 +8,7 @@ using namespace llvm;
 
 // Namespace
 namespace llvm {
-	Pass* createStringEncryptionPass();
+	ModulePass* createStringEncryptionPass();
 	void initializeStringEncryptionPass(PassRegistry &Registry);
 }
 #endif
