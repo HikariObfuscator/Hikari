@@ -93,12 +93,6 @@ struct Obfuscation : public ModulePass {
           P->runOnFunction(F);
           delete P;
         }
-        if (EnableAllObfuscation || EnableAntiDebugging) {
-          P = createAntiDebuggingPass();
-          P->doInitialization(M);
-          P->runOnFunction(F);
-          delete P;
-        }
         if (EnableAllObfuscation || EnableSubstitution) {
           P = createSubstitutionPass();
           P->runOnFunction(F);
@@ -110,6 +104,12 @@ struct Obfuscation : public ModulePass {
           delete P;
         }
       }
+    }
+    if (EnableAllObfuscation || EnableAntiDebugging) {
+      ModulePass *P = createAntiDebuggingPass();
+      P->doInitialization(M);
+      P->runOnModule(M);
+      delete P;
     }
     return true;
   } // End runOnModule

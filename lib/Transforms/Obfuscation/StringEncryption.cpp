@@ -40,7 +40,7 @@ struct StringEncryption : public ModulePass {
 
       if(!F->isDeclaration()){
         Constant* S=ConstantInt::get(Type::getInt32Ty(M.getContext()),0);
-        GlobalVariable *GV=new GlobalVariable(M,S->getType(),false,GlobalValue::LinkageTypes::PrivateLinkage,S,F->getName()+"StringEncryptionStatus");
+        GlobalVariable *GV=new GlobalVariable(M,S->getType(),false,GlobalValue::LinkageTypes::PrivateLinkage,S,"");
         encstatus[F]=GV;
         HandleFunction(F);
       }
