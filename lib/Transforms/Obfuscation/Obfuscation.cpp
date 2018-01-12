@@ -64,6 +64,12 @@ struct Obfuscation : public ModulePass {
         }
       }
     }
+    if (EnableAllObfuscation || EnableAntiDebugging) {
+      ModulePass *P = createAntiDebuggingPass();
+      P->doInitialization(M);
+      P->runOnModule(M);
+      delete P;
+    }
     if (EnableAllObfuscation || EnableStringEncryption) {
       // Now Encrypt Strings
       ModulePass *P = createStringEncryptionPass();
@@ -104,12 +110,6 @@ struct Obfuscation : public ModulePass {
           delete P;
         }
       }
-    }
-    if (EnableAllObfuscation || EnableAntiDebugging) {
-      ModulePass *P = createAntiDebuggingPass();
-      P->doInitialization(M);
-      P->runOnModule(M);
-      delete P;
     }
     return true;
   } // End runOnModule

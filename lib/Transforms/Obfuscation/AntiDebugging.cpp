@@ -43,7 +43,7 @@ namespace llvm{
         if (sys::path::home_directory(Path)) { // Stolen from LineEditor.cpp
           sys::path::append(Path, "Hikari");
           Triple tri(M.getTargetTriple());
-          sys::path::append(Path,"PrecompiledAntiDebugging-"+Triple::getArchTypeName(tri.getArch())+"-"+Triple::getOSTypeName(tri.getOS())+".ll");
+          sys::path::append(Path,"PrecompiledAntiDebugging-"+Triple::getArchTypeName(tri.getArch())+"-"+Triple::getOSTypeName(tri.getOS())+".bc");
           PreCompiledIRPath = Path.str();
         }
       }
@@ -51,7 +51,9 @@ namespace llvm{
       if(f.good()){
         errs() << "Linking PreCompiled AntiDebugging IR From:" << PreCompiledIRPath << "\n";
         SMDiagnostic SMD;
-        Linker::linkModules(M,parseIRFile(StringRef(PreCompiledIRPath),SMD,M.getContext()));
+        unique_ptr<Module> ADBM(parseIRFile(StringRef(PreCompiledIRPath),SMD,M.getContext()));
+        SMD.print("Hikari",errs());
+        Linker::linkModules(M,std::move(ADBM),Linker::Flags::OverrideFromSrc);
         //FIXME: Mess with GV in ADBCallBack
         return true;
       }
@@ -67,6 +69,7 @@ namespace llvm{
         ADBCallBack->setVisibility(GlobalValue::VisibilityTypes::HiddenVisibility);
         ADBCallBack->setLinkage(GlobalValue::LinkageTypes::PrivateLinkage);
         ADBCallBack->removeFnAttr(Attribute::AttrKind::NoInline);
+        ADBCallBack->removeFnAttr(Attribute::AttrKind::OptimizeNone);
         ADBCallBack->addFnAttr(Attribute::AttrKind::AlwaysInline);
       }
       Function *ADBInit=M.getFunction("InitADB");
@@ -75,6 +78,7 @@ namespace llvm{
         ADBInit->setVisibility(GlobalValue::VisibilityTypes::HiddenVisibility);
         ADBInit->setLinkage(GlobalValue::LinkageTypes::PrivateLinkage);
         ADBInit->removeFnAttr(Attribute::AttrKind::NoInline);
+        ADBInit->removeFnAttr(Attribute::AttrKind::OptimizeNone);
         ADBInit->addFnAttr(Attribute::AttrKind::AlwaysInline);
       }
       for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
