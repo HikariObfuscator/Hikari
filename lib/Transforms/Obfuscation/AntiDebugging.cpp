@@ -1,7 +1,19 @@
 /*
  *  LLVM AntiDebugging Pass
- *  https://github.com/Naville
- *  GPL V3 Licensed
+    Copyright (C) 2017 Zhang(https://github.com/Naville/)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published
+    by the Free Software Foundation, either version 3 of the License, or
+    any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #define IOS64ANTIDBG "MOV X0,26\nMOV X1,31\nMOV X2,0\nMOV X3,0\nMOV X16,0\nSVC 128"
 #define IOS32ANTIDBG "MOV R0,31\nMOV R1,0\nMOV R2,0\nMOV R12,26\nSVC 128"

@@ -1,20 +1,25 @@
 /*
- *  LLVM BogusControlFlow Pass
- *  https://github.com/Naville
- *  Relicensed into GPLV3 from original OLLVM Team's NCSA License
- *  The main modification is the branching condition is calculated on-the-fly
- *  Instead of hard-code the always true condition
- *  Below is the original license and description
+    LLVM BogusControlFlow Pass
+    The main modification is the branching condition is calculated on-the-fly
+    Instead of hard-code the always true condition. Relicensed from NCSA license to AGPL
+    Copyright (C) 2017 Zhang(https://github.com/Naville/)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published
+    by the Free Software Foundation, either version 3 of the License, or
+    any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 //===- BogusControlFlow.cpp - BogusControlFlow Obfuscation
 // pass-------------------------===//
-//
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
-//
-//===----------------------------------------------------------------------------------===//
 //
 // This file implements BogusControlFlow's pass, inserting bogus control flow.
 // It adds bogus flow to a given basic block this way:
