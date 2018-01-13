@@ -665,9 +665,10 @@ struct BogusControlFlow : public FunctionPass {
     // Replacing all the branches we found
     for (std::vector<Instruction *>::iterator i = toEdit.begin();
          i != toEdit.end(); ++i) {
-      // We Use LLVM EE To Calculate LHS and RHS
-
-      // Setup Initial Execution Environment
+      // Previously We Use LLVM EE To Calculate LHS and RHS
+      // Since IRBuilder<> uses ConstantFolding to fold constants.
+      // The return instruction is already returning constants
+      // The variable names below are the artifact from the Emulation Era
       Type *I32Ty = Type::getInt32Ty(M.getContext());
       Module emuModule("HikariBCFEmulator", M.getContext());
       emuModule.setDataLayout(M.getDataLayout());
@@ -718,19 +719,9 @@ struct BogusControlFlow : public FunctionPass {
                                       (sizeof(preds) / sizeof(preds[0]))];
       Last = IRBReal.CreateICmp(pred, Last, RealRHS);
       emuLast = IRBEmu.CreateICmp(pred, emuLast, RealRHS);
-      IRBEmu.CreateRet(emuLast);
-      unique_ptr<Module> emuUP(&emuModule);
-      string enginebuildererrstr;
-      EngineBuilder EB(move(emuUP));
-      EB.setErrorStr(&enginebuildererrstr);
-      EB.setEngineKind(EEModeforEvaluation);
-      ExecutionEngine *EE = EB.create();
-      if (!EE) {
-        errs() << enginebuildererrstr << "\n";
-        abort();
-      }
-      GenericValue GV = EE->runFunction(emuFunction, ArrayRef<GenericValue>());
-      uint64_t emulateResult = GV.IntVal.getLimitedValue();
+      ReturnInst* RI=IRBEmu.CreateRet(emuLast);
+      ConstantInt* emuCI=cast<ConstantInt>(RI->getReturnValue());
+      uint64_t emulateResult = emuCI->getZExtValue();
       vector<BasicBlock *> BBs; // Start To Prepare IndirectBranching
       if (emulateResult == 1) {
         // Our ConstantExpr evaluates to true;
