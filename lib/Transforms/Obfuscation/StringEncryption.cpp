@@ -238,10 +238,19 @@ struct StringEncryption : public ModulePass {
         iter->first->removeDeadConstantUsers();
       }
     }//End Replace Uses
-    //CleanUp Old GVs
+    //CleanUp Old ObjC GVs
+    for(GlobalVariable* GV:objCStrings){
+      if(GV->getNumUses()==0){
+        GV->dropAllReferences();
+        old2new.erase(GV);
+        GV->removeFromParent();
+      }
+    }
+    //CleanUp Old Raw GVs
     for(map<GlobalVariable*,GlobalVariable*>::iterator iter = old2new.begin(); iter != old2new.end(); ++iter)
     {
       GlobalVariable* toDelete=iter->first;
+      toDelete->removeDeadConstantUsers();
       if(toDelete->getNumUses()==0){
         toDelete->dropAllReferences();
         toDelete->eraseFromParent();
