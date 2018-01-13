@@ -243,7 +243,7 @@ struct StringEncryption : public ModulePass {
       if(GV->getNumUses()==0){
         GV->dropAllReferences();
         old2new.erase(GV);
-        GV->removeFromParent();
+        GV->eraseFromParent();
       }
     }
     //CleanUp Old Raw GVs

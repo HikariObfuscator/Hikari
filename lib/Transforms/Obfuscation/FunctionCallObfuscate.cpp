@@ -166,6 +166,11 @@ struct FunctionCallObfuscate : public FunctionPass {
               I->eraseFromParent();
             }
           }
+          GV.removeDeadConstantUsers();
+          if(GV.getNumUses()==0){
+            GV.dropAllReferences();
+            GV.eraseFromParent();
+          }
         }
       }
       // Selector Convert
@@ -190,6 +195,11 @@ struct FunctionCallObfuscate : public FunctionPass {
               I->replaceAllUsesWith(BCI);
               I->eraseFromParent();
             }
+          }
+          GV.removeDeadConstantUsers();
+          if(GV.getNumUses()==0){
+            GV.dropAllReferences();
+            GV.eraseFromParent();
           }
         }
       }
