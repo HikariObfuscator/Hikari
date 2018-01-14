@@ -15,8 +15,6 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#define IOS64ANTIDBG "MOV X0,26\nMOV X1,31\nMOV X2,0\nMOV X3,0\nMOV X16,0\nSVC 128"
-#define IOS32ANTIDBG "MOV R0,31\nMOV R1,0\nMOV R2,0\nMOV R12,26\nSVC 128"
 #include "llvm/IR/Instructions.h"
 #include "llvm/Pass.h"
 #include "llvm/IR/Module.h"
@@ -104,27 +102,6 @@ namespace llvm{
     bool runOnFunction(Function &F){
       BasicBlock *EntryBlock = &(F.getEntryBlock());
       IRBuilder<> IRB(EntryBlock, EntryBlock->getFirstInsertionPt());
-      FunctionType *ADBFTy =FunctionType::get(Type::getVoidTy(F.getParent()->getContext()),ArrayRef<Type*>(), false);
-      InlineAsm *IA =NULL;
-      Triple tri(F.getParent()->getTargetTriple());
-      Triple::OSType ost=tri.getOS();
-      if(ost==Triple::OSType::IOS){
-        errs()<<"Injecting Inline Assembly AntiDebugging For:"<<F.getParent()->getTargetTriple()<<"\n";
-        StringRef InlineASMString;
-        if(tri.isArch64Bit()){
-          //We are 64bit iOS. i.e. AArch64
-          InlineASMString=IOS64ANTIDBG;
-        }
-        else{
-          InlineASMString=IOS32ANTIDBG;
-        }
-        IA=InlineAsm::get(ADBFTy,InlineASMString,"",true, false, InlineAsm::AD_Intel);
-        IRB.CreateCall(IA, ArrayRef<Value*>());
-      }
-      else{
-        //TODO: Support macOS's 32/64bit syscall
-        errs()<<F.getParent()->getTargetTriple()<<" Unsupported Inline Assembly AntiDebugging Target\n";
-      }
       //Now operate on Linked AntiDBGCallbacks
       Function *ADBCallBack=F.getParent()->getFunction("ADBCallBack");
       Function *ADBInit=F.getParent()->getFunction("InitADB");
