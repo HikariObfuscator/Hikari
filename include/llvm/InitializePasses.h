@@ -384,6 +384,7 @@ void initializeXRayInstrumentationPass(PassRegistry&);
 void initializeMIRCanonicalizerPass(PassRegistry &);
 void initializeStringEncryptionPass(PassRegistry &);
 void initializeFunctionCallObfuscatePass(PassRegistry &);
+void initializeAntiDebuggingPass(PassRegistry &);
 void initializeAntiClassDumpPass(PassRegistry &);
 void initializeBogusControlFlowPass(PassRegistry &);
 void initializeFlatteningPass(PassRegistry &);
@@ -392,6 +393,7 @@ void initializeSubstitutionPass(PassRegistry &);
 void initializeAntiDebuggingPass(PassRegistry &);
 void initializeSymbolObfuscationPass(PassRegistry &);
 void initializeIndirectBranchPass(PassRegistry &);
+void initializeObfuscationPass(PassRegistry &);
 } // end namespace llvm
 
 #endif // LLVM_INITIALIZEPASSES_H

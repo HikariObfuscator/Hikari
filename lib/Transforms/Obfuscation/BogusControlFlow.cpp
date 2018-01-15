@@ -161,10 +161,6 @@ namespace {
 struct BogusControlFlow : public FunctionPass {
   static char ID; // Pass identification
   BogusControlFlow() : FunctionPass(ID) {}
-  bool doInitialization(Module &M) override {
-    InitializeAllTargets();
-    return false;
-  }
   /* runOnFunction
    *
    * Overwrite FunctionPass method to apply the transformation

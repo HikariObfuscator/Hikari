@@ -116,9 +116,9 @@ struct Obfuscation : public ModulePass {
           delete P;
         }
         if (EnableAllObfuscation || EnableSubstitution) {
-          P = createSubstitutionPass();
-          P->runOnFunction(F);
-          delete P;
+            P = createSubstitutionPass();
+            P->runOnFunction(F);
+            delete P;
         }
         if (EnableAllObfuscation || EnableIndirectBranching) {
           P = createIndirectBranchPass();
@@ -138,4 +138,14 @@ ModulePass *createObfuscationPass() {
 }
 } // namespace llvm
 char Obfuscation::ID = 0;
-INITIALIZE_PASS(Obfuscation, "obfus", "Enable Obfuscation", true, true)
+INITIALIZE_PASS_BEGIN(Obfuscation, "obfus", "Enable Obfuscation", true, true)
+INITIALIZE_PASS_DEPENDENCY(AntiClassDump);
+INITIALIZE_PASS_DEPENDENCY(AntiDebugging);
+INITIALIZE_PASS_DEPENDENCY(BogusControlFlow);
+INITIALIZE_PASS_DEPENDENCY(Flattening);
+INITIALIZE_PASS_DEPENDENCY(FunctionCallObfuscate);
+INITIALIZE_PASS_DEPENDENCY(IndirectBranch);
+INITIALIZE_PASS_DEPENDENCY(SplitBasicBlock);
+INITIALIZE_PASS_DEPENDENCY(StringEncryption);
+INITIALIZE_PASS_DEPENDENCY(Substitution);
+INITIALIZE_PASS_END(Obfuscation, "obfus", "Enable Obfuscation", true, true)
