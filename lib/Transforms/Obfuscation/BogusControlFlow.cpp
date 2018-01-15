@@ -151,15 +151,6 @@ static cl::opt<int> ConditionExpressionComplexity(
     cl::desc("The complexity of the expression used to generate branching "
              "condition"),
     cl::value_desc("Complexity"), cl::init(3), cl::Optional);
-// FIXME: For whatever reason,JIT seems to be broken for our crafted Module
-// while Interpreter works fine.  However Interpreter has Huge performance
-// impact
-static cl::opt<EngineKind::Kind> EEModeforEvaluation(
-    "bcf_eval_mode", cl::desc("Mode Used For Evaluation Condition."),
-    cl::value_desc("Mode"), cl::init(EngineKind::Interpreter), cl::Optional,
-    cl::values(clEnumVal(EngineKind::Interpreter, "Interpreter"),
-               clEnumVal(EngineKind::JIT, "JIT"),
-               clEnumVal(EngineKind::Either, "Either")));
 static Instruction::BinaryOps ops[] = {Instruction::Add, Instruction::Sub,
                                        Instruction::And, Instruction::Or,
                                        Instruction::Xor};
