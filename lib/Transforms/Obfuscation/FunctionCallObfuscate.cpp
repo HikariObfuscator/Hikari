@@ -60,9 +60,14 @@ struct FunctionCallObfuscate : public FunctionPass {
         SymbolConfigPath = Path.str();
       }
     }
-    errs() << "Loading Symbol Configuration From:" << SymbolConfigPath << "\n";
     ifstream infile(SymbolConfigPath);
-    infile >> this->Configuration;
+    if(infile.good()){
+      errs() << "Loading Symbol Configuration From:" << SymbolConfigPath << "\n";
+      infile >> this->Configuration;
+    }
+    else{
+      errs() << "Failed To Loading Symbol Configuration From:" << SymbolConfigPath << "\n";
+    }
     Triple tri(M.getTargetTriple());
     if (tri.getVendor() != Triple::VendorType::Apple) {
       return false;
