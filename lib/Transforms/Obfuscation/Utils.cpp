@@ -1,7 +1,7 @@
 #include "llvm/Transforms/Obfuscation/Utils.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
 #include <sstream>
-#include "llvm/IR/Module.h"
 
 // Shamefully borrowed from ../Scalar/RegToMem.cpp :(
 bool valueEscapes(Instruction *Inst) {
@@ -99,9 +99,11 @@ std::string readAnnotate(Function *f) {
 
 bool toObfuscate(bool flag, Function *f, std::string attribute) {
 
-  // FIXME: IIRC Clang's CGObjCMac.cpp doesn't support inserting annotations for ObjC Code
-  //That's exactly why O-LLVM's annotations Doesn't work on ObjC classes/methods
-  //We just force return true here.Unless someone is willing to fix CFE properly
+  // FIXME: IIRC Clang's CGObjCMac.cpp doesn't support inserting annotations for
+  // ObjC Code
+  // That's exactly why O-LLVM's annotations Doesn't work on ObjC
+  // classes/methods  We just force return true here.Unless someone is willing to
+  // fix CFE properly
 
   return true;
 }

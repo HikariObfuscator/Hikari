@@ -17,7 +17,6 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "llvm/Transforms/Obfuscation/Obfuscation.h"
 #include "json.hpp"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/CallSite.h"
@@ -31,6 +30,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Obfuscation/Obfuscation.h"
 #include <algorithm>
 #include <cstdlib>
 #include <dlfcn.h>
@@ -50,7 +50,9 @@ struct FunctionCallObfuscate : public FunctionPass {
   static char ID;
   json Configuration;
   FunctionCallObfuscate() : FunctionPass(ID) {}
-  StringRef getPassName()const override{return StringRef("FunctionCallObfuscate");}
+  StringRef getPassName() const override {
+    return StringRef("FunctionCallObfuscate");
+  }
   virtual bool doInitialization(Module &M) override {
     // Basic Defs
     if (SymbolConfigPath == "+-x/") {
@@ -61,12 +63,13 @@ struct FunctionCallObfuscate : public FunctionPass {
       }
     }
     ifstream infile(SymbolConfigPath);
-    if(infile.good()){
-      errs() << "Loading Symbol Configuration From:" << SymbolConfigPath << "\n";
+    if (infile.good()) {
+      errs() << "Loading Symbol Configuration From:" << SymbolConfigPath
+             << "\n";
       infile >> this->Configuration;
-    }
-    else{
-      errs() << "Failed To Loading Symbol Configuration From:" << SymbolConfigPath << "\n";
+    } else {
+      errs() << "Failed To Loading Symbol Configuration From:"
+             << SymbolConfigPath << "\n";
     }
     Triple tri(M.getTargetTriple());
     if (tri.getVendor() != Triple::VendorType::Apple) {
@@ -159,20 +162,20 @@ struct FunctionCallObfuscate : public FunctionPass {
           for (auto U = GV.user_begin(); U != GV.user_end(); U++) {
             if (Instruction *I = dyn_cast<Instruction>(*U)) {
               IRBuilder<> builder(I);
-              Function *objc_getClass_Func = cast<Function>(
-                  M.getFunction("objc_getClass"));
+              Function *objc_getClass_Func =
+                  cast<Function>(M.getFunction("objc_getClass"));
               Value *newClassName =
                   builder.CreateGlobalStringPtr(StringRef(className));
               CallInst *CI =
                   builder.CreateCall(objc_getClass_Func, {newClassName});
-              //We need to bitcast it back to avoid IRVerifier
-              Value* BCI=builder.CreateBitCast(CI,I->getType());
+              // We need to bitcast it back to avoid IRVerifier
+              Value *BCI = builder.CreateBitCast(CI, I->getType());
               I->replaceAllUsesWith(BCI);
               I->eraseFromParent();
             }
           }
           GV.removeDeadConstantUsers();
-          if(GV.getNumUses()==0){
+          if (GV.getNumUses() == 0) {
             GV.dropAllReferences();
             GV.eraseFromParent();
           }
@@ -195,14 +198,14 @@ struct FunctionCallObfuscate : public FunctionPass {
               Value *newGlobalSELName = builder.CreateGlobalStringPtr(SELName);
               CallInst *CI =
                   builder.CreateCall(sel_registerName_Func, {newGlobalSELName});
-              //We need to bitcast it back to avoid IRVerifier
-              Value* BCI=builder.CreateBitCast(CI,I->getType());
+              // We need to bitcast it back to avoid IRVerifier
+              Value *BCI = builder.CreateBitCast(CI, I->getType());
               I->replaceAllUsesWith(BCI);
               I->eraseFromParent();
             }
           }
           GV.removeDeadConstantUsers();
-          if(GV.getNumUses()==0){
+          if (GV.getNumUses() == 0) {
             GV.dropAllReferences();
             GV.eraseFromParent();
           }
@@ -302,7 +305,10 @@ struct FunctionCallObfuscate : public FunctionPass {
     return true;
   }
 };
-FunctionPass *createFunctionCallObfuscatePass() { return new FunctionCallObfuscate(); }
+FunctionPass *createFunctionCallObfuscatePass() {
+  return new FunctionCallObfuscate();
+}
 } // namespace llvm
 char FunctionCallObfuscate::ID = 0;
-INITIALIZE_PASS(FunctionCallObfuscate, "fcoobf", "Enable Function CallSite Obfuscation.",true,true)
+INITIALIZE_PASS(FunctionCallObfuscate, "fcoobf",
+                "Enable Function CallSite Obfuscation.", true, true)

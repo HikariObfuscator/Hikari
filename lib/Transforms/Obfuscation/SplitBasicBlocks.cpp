@@ -11,9 +11,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Transforms/Obfuscation/CryptoUtils.h"
 #include "llvm/Transforms/Obfuscation/Split.h"
 #include "llvm/Transforms/Obfuscation/Utils.h"
-#include "llvm/Transforms/Obfuscation/CryptoUtils.h"
 
 #define DEBUG_TYPE "split"
 
@@ -38,10 +38,11 @@ struct SplitBasicBlock : public FunctionPass {
   bool containsPHI(BasicBlock *b);
   void shuffle(std::vector<int> &vec);
 };
-}
+} // namespace
 
 char SplitBasicBlock::ID = 0;
-INITIALIZE_PASS(SplitBasicBlock, "splitobf", "Enable BasicBlockSpliting.",true, true)
+INITIALIZE_PASS(SplitBasicBlock, "splitobf", "Enable BasicBlockSpliting.", true,
+                true)
 FunctionPass *llvm::createSplitBasicBlockPass() {
   return new SplitBasicBlock();
 }
@@ -49,7 +50,7 @@ FunctionPass *llvm::createSplitBasicBlockPass() {
 bool SplitBasicBlock::runOnFunction(Function &F) {
   // Check if the number of applications is correct
   if (!((SplitNum > 1) && (SplitNum <= 10))) {
-    errs()<<"Split application basic block percentage\
+    errs() << "Split application basic block percentage\
             -split_num=x must be 1 < x <= 10";
     return false;
   }
@@ -111,7 +112,7 @@ void SplitBasicBlock::split(Function *f) {
         ++it;
       }
       last = test[i];
-      if(toSplit->size() < 2)
+      if (toSplit->size() < 2)
         continue;
       toSplit = toSplit->splitBasicBlock(it, toSplit->getName() + ".split");
     }

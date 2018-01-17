@@ -1,8 +1,8 @@
 /*
     LLVM BogusControlFlow Pass
     The main modification is the branching condition is calculated on-the-fly
-    Instead of hard-code the always true condition. Relicensed from NCSA license to AGPL
-    Copyright (C) 2017 Zhang(https://github.com/Naville/)
+    Instead of hard-code the always true condition. Relicensed from NCSA license
+   to AGPL Copyright (C) 2017 Zhang(https://github.com/Naville/)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published
@@ -364,18 +364,15 @@ struct BogusControlFlow : public FunctionPass {
     // recognition This is achieved by jumping to a random BB
     switch (llvm::cryptoutils->get_uint16_t() % 2) {
     case 0: {
-      BranchInst::Create(originalBBpart2, originalBB,condition2,
-                         originalBB);
+      BranchInst::Create(originalBBpart2, originalBB, condition2, originalBB);
       break;
     }
     case 1: {
-      BranchInst::Create(originalBBpart2, alteredBB,condition2,
-                         originalBB);
+      BranchInst::Create(originalBBpart2, alteredBB, condition2, originalBB);
       break;
     }
     default: {
-      BranchInst::Create(originalBBpart2, originalBB,condition2,
-                         originalBB);
+      BranchInst::Create(originalBBpart2, originalBB, condition2, originalBB);
       break;
     }
     }
@@ -706,8 +703,8 @@ struct BogusControlFlow : public FunctionPass {
                                       (sizeof(preds) / sizeof(preds[0]))];
       Last = IRBReal.CreateICmp(pred, Last, RealRHS);
       emuLast = IRBEmu.CreateICmp(pred, emuLast, RealRHS);
-      ReturnInst* RI=IRBEmu.CreateRet(emuLast);
-      ConstantInt* emuCI=cast<ConstantInt>(RI->getReturnValue());
+      ReturnInst *RI = IRBEmu.CreateRet(emuLast);
+      ConstantInt *emuCI = cast<ConstantInt>(RI->getReturnValue());
       uint64_t emulateResult = emuCI->getZExtValue();
       vector<BasicBlock *> BBs; // Start To Prepare IndirectBranching
       if (emulateResult == 1) {
@@ -754,4 +751,6 @@ struct BogusControlFlow : public FunctionPass {
 char BogusControlFlow::ID = 0;
 INITIALIZE_PASS(BogusControlFlow, "bcfobf", "Enable BogusControlFlow.", true,
                 true)
-FunctionPass *llvm::createBogusControlFlowPass() { return new BogusControlFlow(); }
+FunctionPass *llvm::createBogusControlFlowPass() {
+  return new BogusControlFlow();
+}

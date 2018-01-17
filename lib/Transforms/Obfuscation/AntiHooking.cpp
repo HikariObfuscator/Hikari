@@ -81,7 +81,9 @@ struct AntiHook : public ModulePass {
   bool runOnModule(Module &M) override {
     Triple tri(M.getTargetTriple());
     vector<unsigned long long> signatures;
-    if(tri.isAArch64()){signatures.push_back(SUBSTRATE_SIGNATURE_AARCH64);}
+    if (tri.isAArch64()) {
+      signatures.push_back(SUBSTRATE_SIGNATURE_AARCH64);
+    }
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
       Function &F = *iter;
       if (!F.isDeclaration()) {
@@ -118,8 +120,8 @@ struct AntiHook : public ModulePass {
           }
         }
 
-        for(unsigned long long sig:signatures){
-          HandleInlineHook(&(F), sig,calledFunctions);
+        for (unsigned long long sig : signatures) {
+          HandleInlineHook(&(F), sig, calledFunctions);
         }
       }
     }
@@ -164,19 +166,19 @@ struct AntiHook : public ModulePass {
     IRBA.CreateBr(B);
     // Now operate on Linked AntiHookCallbacks
     // First Extract the value
-    Value *lastCondition = ConstantInt::get(Int1Ty,1);
-    for(Function* called:FunctionToDetect){
-        Value *BitCasted =
-            IRBB.CreateBitCast(called, Type::getInt8PtrTy(A->getContext()));
-          Value *rawValue = IRBB.CreateLoad(BitCasted);
-          assert(rawValue->getType()->isIntegerTy() &&
-                 "Value Passed Into HandleInlineHook() Not A Pointer To Integer!");
-          Value *FunctionEntry = IRBB.CreateZExt(rawValue, Int64Ty);
-          Value *isHooked =
-              IRBB.CreateICmpEQ(FunctionEntry, ConstantInt::get(Int64Ty, signature));
-          lastCondition=IRBB.CreateOr(isHooked,lastCondition);
+    Value *lastCondition = ConstantInt::get(Int1Ty, 1);
+    for (Function *called : FunctionToDetect) {
+      Value *BitCasted =
+          IRBB.CreateBitCast(called, Type::getInt8PtrTy(A->getContext()));
+      Value *rawValue = IRBB.CreateLoad(BitCasted);
+      assert(rawValue->getType()->isIntegerTy() &&
+             "Value Passed Into HandleInlineHook() Not A Pointer To Integer!");
+      Value *FunctionEntry = IRBB.CreateZExt(rawValue, Int64Ty);
+      Value *isHooked = IRBB.CreateICmpEQ(FunctionEntry,
+                                          ConstantInt::get(Int64Ty, signature));
+      lastCondition = IRBB.CreateOr(isHooked, lastCondition);
     }
-    IRBB.CreateCondBr(lastCondition,D,C);
+    IRBB.CreateCondBr(lastCondition, D, C);
     Function *AHCallBack = A->getModule()->getFunction("AHCallBack");
     if (AHCallBack) {
       IRBD.CreateCall(AHCallBack, ArrayRef<Value *>());
@@ -190,7 +192,7 @@ struct AntiHook : public ModulePass {
       IRBD.CreateCall(abort_declare, ArrayRef<Value *>());
     }
     IRBD.CreateBr(C); // Insert a new br into the end of B to jump back to C*/
-  } // End HandleAArch64InlineHook
+  }                   // End HandleAArch64InlineHook
 };
 } // namespace llvm
 ModulePass *llvm::createAntiHookPass() { return new AntiHook(); }

@@ -56,15 +56,17 @@ static cl::opt<bool>
     EnableIndirectBranching("enable-indibran", cl::init(false), cl::NotHidden,
                             cl::desc("Enable Indirect Branching."));
 
-
-static cl::opt<bool> EnableAntiHooking("enable-antihook", cl::init(false), cl::NotHidden,
-                        cl::desc("Enable Indirect Branching."));
+static cl::opt<bool> EnableAntiHooking("enable-antihook", cl::init(false),
+                                       cl::NotHidden,
+                                       cl::desc("Enable Indirect Branching."));
 // End Obfuscator Options
 namespace llvm {
 struct Obfuscation : public ModulePass {
   static char ID;
   Obfuscation() : ModulePass(ID) {}
-  StringRef getPassName() const override { return StringRef("HikariObfuscationScheduler"); }
+  StringRef getPassName() const override {
+    return StringRef("HikariObfuscationScheduler");
+  }
   bool runOnModule(Module &M) override {
     // Initial ACD Pass
     if (EnableAllObfuscation || EnableAntiClassDump) {
@@ -86,7 +88,7 @@ struct Obfuscation : public ModulePass {
       }
     }
     if (EnableAllObfuscation || EnableAntiHooking) {
-      ModulePass *P=createAntiHookPass();
+      ModulePass *P = createAntiHookPass();
       P->doInitialization(M);
       P->runOnModule(M);
       delete P;
@@ -110,33 +112,39 @@ struct Obfuscation : public ModulePass {
         FunctionPass *P = NULL;
         if (EnableAllObfuscation || EnableBasicBlockSplit) {
           P = createSplitBasicBlockPass();
-          P->doInitialization(M);
           P->runOnFunction(F);
           delete P;
         }
         if (EnableAllObfuscation || EnableBogusControlFlow) {
           P = createBogusControlFlowPass();
-          P->doInitialization(M);
           P->runOnFunction(F);
           delete P;
         }
         if (EnableAllObfuscation || EnableFlattening) {
           P = createFlatteningPass();
-          P->doInitialization(M);
           P->runOnFunction(F);
           delete P;
         }
         if (EnableAllObfuscation || EnableSubstitution) {
-            P = createSubstitutionPass();
-            P->runOnFunction(F);
-            delete P;
-        }
-        if (EnableAllObfuscation || EnableIndirectBranching) {
-          P = createIndirectBranchPass();
+          P = createSubstitutionPass();
           P->runOnFunction(F);
           delete P;
         }
       }
+    }
+
+    //Post-Run Clean-up part
+    if (EnableAllObfuscation || EnableIndirectBranching) {
+      FunctionPass *P = createIndirectBranchPass();
+      P->doInitialization(M);
+      vector<Function*> funcs;
+      for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
+        funcs.push_back(&*iter);
+      }
+      for(Function *F:funcs){
+        P->runOnFunction(*F);
+      }
+      delete P;
     }
     return true;
   } // End runOnModule

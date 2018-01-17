@@ -31,8 +31,26 @@ using namespace std;
 namespace llvm {
 struct IndirectBranch : public FunctionPass {
   static char ID;
+  map<BasicBlock *, unsigned long long> indexmap;
   IndirectBranch() : FunctionPass(ID) {}
   StringRef getPassName() const override { return StringRef("IndirectBranch"); }
+  bool doInitialization(Module &M) override {
+    vector<Constant *> BBs;
+    unsigned long long i = 0;
+    for (auto F = M.begin(); F != M.end(); F++) {
+      for (auto BB = F->begin(); BB != F->end(); BB++) {
+        indexmap[&*BB] = i++;
+        BBs.push_back(BlockAddress::get(&*BB));
+      }
+    }
+    ArrayType *AT =
+        ArrayType::get(Type::getInt8PtrTy(M.getContext()), BBs.size());
+    Constant *BlockAddressArray =
+        ConstantArray::get(AT, ArrayRef<Constant *>(BBs));
+    new GlobalVariable(M, AT, false, GlobalValue::LinkageTypes::PrivateLinkage,
+                       BlockAddressArray, "IndirectBranchingGlobalTable");
+    return true;
+  }
   bool runOnFunction(Function &Func) override {
     if (Func.isDeclaration()) {
       return false;
@@ -44,12 +62,14 @@ struct IndirectBranch : public FunctionPass {
         BIs.push_back(BI);
       }
     } // Finish collecting branching conditions
+    Value *zero =
+        ConstantInt::get(Type::getInt32Ty(Func.getParent()->getContext()), 0);
     for (BranchInst *BI : BIs) {
       IRBuilder<> IRB(BI);
       vector<BasicBlock *> BBs;
       // We use the condition's evaluation result to generate the GEP
-      // instruction  False evaluates to 0 while true evaluates to 1.  So here we
-      // insert the false block first
+      // instruction  False evaluates to 0 while true evaluates to 1.  So here
+      // we insert the false block first
       if (BI->isConditional()) {
         BBs.push_back(BI->getSuccessor(1));
       }
@@ -60,20 +80,30 @@ struct IndirectBranch : public FunctionPass {
       for (unsigned i = 0; i < BBs.size(); i++) {
         BlockAddresses.push_back(BlockAddress::get(BBs[i]));
       }
-      Constant *BlockAddressArray =
-          ConstantArray::get(AT, ArrayRef<Constant *>(BlockAddresses));
-      AllocaInst *allocated = IRB.CreateAlloca(AT);
-      IRB.CreateStore(BlockAddressArray, allocated);
-      Value *GEP = NULL;
-      Value *zero =
-          ConstantInt::get(Type::getInt32Ty(Func.getParent()->getContext()), 0);
+      GlobalVariable *LoadFrom = NULL;
+
+      if (BI->isConditional()) {
+        // Create a new GV
+        Constant *BlockAddressArray =
+            ConstantArray::get(AT, ArrayRef<Constant *>(BlockAddresses));
+        LoadFrom = new GlobalVariable(*Func.getParent(), AT, false,
+                                      GlobalValue::LinkageTypes::PrivateLinkage,
+                                      BlockAddressArray);
+      } else {
+        LoadFrom =
+            Func.getParent()->getGlobalVariable("IndirectBranchingGlobalTable",true);
+      }
+      Value *index = NULL;
       if (BI->isConditional()) {
         Value *condition = BI->getCondition();
-        Value *sextcondition = IRB.CreateZExt(condition,Type::getInt32Ty(Func.getParent()->getContext()));
-        GEP = IRB.CreateGEP(allocated, {zero,sextcondition});
+        index = IRB.CreateZExt(
+            condition, Type::getInt32Ty(Func.getParent()->getContext()));
       } else {
-        GEP = IRB.CreateGEP(allocated, {zero, zero});
+        index =
+            ConstantInt::get(Type::getInt32Ty(Func.getParent()->getContext()),
+                             indexmap[BI->getSuccessor(0)]);
       }
+      Value *GEP = IRB.CreateGEP(LoadFrom, {zero, index});
       LoadInst *LI = IRB.CreateLoad(GEP, "IndirectBranchingTargetAddress");
       IndirectBrInst *indirBr = IndirectBrInst::Create(LI, BBs.size());
       for (BasicBlock *BB : BBs) {
