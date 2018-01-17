@@ -88,6 +88,7 @@ struct AntiHook : public ModulePass {
 
         // Analyze CallInst And InvokeInst
         vector<Function *> calledFunctions;
+        calledFunctions.push_back(&F);
         vector<Instruction *> Insts; // Otherwise we get infinite loop
         for (inst_iterator I = inst_begin(&F), E = inst_end(&F); I != E; ++I) {
           Insts.push_back(&*I);
