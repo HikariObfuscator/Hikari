@@ -40,15 +40,15 @@ using namespace llvm;
 using namespace std;
 static cl::opt<string>
     PreCompiledIRPath("adbextirpath",
-                     cl::desc("External Path Pointing To Pre-compiled IR.See Wiki"),
-                     cl::value_desc("filename"), cl::init("+-x/"));
+                     cl::desc("External Path Pointing To Pre-compiled AntiDebugging IR.See Wiki"),
+                     cl::value_desc("filename"), cl::init(""));
 namespace llvm{
   struct AntiDebugging : public ModulePass {
     static char ID;
     AntiDebugging() : ModulePass(ID) {}
     StringRef getPassName()const override{return StringRef("AntiDebugging");}
     virtual bool doInitialization(Module &M) override {
-      if (PreCompiledIRPath == "+-x/") {
+      if (PreCompiledIRPath == "") {
         SmallString<32> Path;
         if (sys::path::home_directory(Path)) { // Stolen from LineEditor.cpp
           sys::path::append(Path, "Hikari");

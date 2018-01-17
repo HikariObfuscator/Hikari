@@ -55,11 +55,16 @@ static cl::opt<bool>
 static cl::opt<bool>
     EnableIndirectBranching("enable-indibran", cl::init(false), cl::NotHidden,
                             cl::desc("Enable Indirect Branching."));
+
+
+static cl::opt<bool> EnableAntiHooking("enable-antihook", cl::init(false), cl::NotHidden,
+                        cl::desc("Enable Indirect Branching."));
 // End Obfuscator Options
 namespace llvm {
 struct Obfuscation : public ModulePass {
   static char ID;
   Obfuscation() : ModulePass(ID) {}
+  StringRef getPassName() const override { return StringRef("HikariObfuscationScheduler"); }
   bool runOnModule(Module &M) override {
     // Initial ACD Pass
     if (EnableAllObfuscation || EnableAntiClassDump) {
@@ -79,6 +84,12 @@ struct Obfuscation : public ModulePass {
           delete P;
         }
       }
+    }
+    if (EnableAllObfuscation || EnableAntiHooking) {
+      ModulePass *P=createAntiHookPass();
+      P->doInitialization(M);
+      P->runOnModule(M);
+      delete P;
     }
     if (EnableAllObfuscation || EnableAntiDebugging) {
       ModulePass *P = createAntiDebuggingPass();

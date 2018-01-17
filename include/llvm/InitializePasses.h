@@ -391,6 +391,7 @@ void initializeFlatteningPass(PassRegistry &);
 void initializeSplitBasicBlockPass(PassRegistry &);
 void initializeSubstitutionPass(PassRegistry &);
 void initializeAntiDebuggingPass(PassRegistry &);
+void initializeAntiHookPass(PassRegistry &);
 void initializeSymbolObfuscationPass(PassRegistry &);
 void initializeIndirectBranchPass(PassRegistry &);
 void initializeObfuscationPass(PassRegistry &);
