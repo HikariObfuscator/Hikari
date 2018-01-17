@@ -39,8 +39,11 @@ struct IndirectBranch : public FunctionPass {
     unsigned long long i = 0;
     for (auto F = M.begin(); F != M.end(); F++) {
       for (auto BB = F->begin(); BB != F->end(); BB++) {
-        indexmap[&*BB] = i++;
-        BBs.push_back(BlockAddress::get(&*BB));
+        BasicBlock *BBPtr=&*BB;
+        if(BBPtr!=&(BBPtr->getParent()->getEntryBlock())){
+          indexmap[BBPtr] = i++;
+          BBs.push_back(BlockAddress::get(BBPtr));
+        }
       }
     }
     ArrayType *AT =
@@ -82,7 +85,7 @@ struct IndirectBranch : public FunctionPass {
       }
       GlobalVariable *LoadFrom = NULL;
 
-      if (BI->isConditional()) {
+      if (BI->isConditional() || indexmap.find(BI->getSuccessor(0))==indexmap.end()) {
         // Create a new GV
         Constant *BlockAddressArray =
             ConstantArray::get(AT, ArrayRef<Constant *>(BlockAddresses));
