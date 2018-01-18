@@ -1,7 +1,5 @@
 set(LLVM_LINK_COMPONENTS
-  ExecutionEngine
-  MCJIT
-  Interpreter
+  IRReader
 )
 add_llvm_library(LLVMObfuscation
   SymbolObfuscation.cpp

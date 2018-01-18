@@ -109,10 +109,6 @@
 //===----------------------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Obfuscation/BogusControlFlow.h"
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/GenericValue.h"
-#include "llvm/ExecutionEngine/Interpreter.h"
-#include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/NoFolder.h"
 #include "llvm/Support/TargetSelect.h"
