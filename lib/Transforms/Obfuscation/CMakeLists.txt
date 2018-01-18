@@ -1,6 +1,3 @@
-set(LLVM_LINK_COMPONENTS
-  IRReader
-)
 add_llvm_library(LLVMObfuscation
   SymbolObfuscation.cpp
   FunctionCallObfuscate.cpp

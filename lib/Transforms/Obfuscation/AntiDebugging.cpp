@@ -69,7 +69,7 @@ struct AntiDebugging : public ModulePass {
       unique_ptr<Module> ADBM(
           parseIRFile(StringRef(PreCompiledIRPath), SMD, M.getContext()));
       //SMD.print("Hikari", errs());
-      Linker::linkModules(M, std::move(ADBM), Linker::Flags::OverrideFromSrc);
+      Linker::linkModules(M, std::move(ADBM), Linker::Flags::LinkOnlyNeeded);
       // FIXME: Mess with GV in ADBCallBack
       return true;
     } else {
