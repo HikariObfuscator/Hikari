@@ -81,7 +81,7 @@ struct AntiHook : public ModulePass {
   bool runOnModule(Module &M) override {
     Triple tri(M.getTargetTriple());
     vector<unsigned long long> signatures;
-    if (tri.isAArch64()) {
+    if (tri.getArch()==Triple::ArchType::aarch64) {
       signatures.push_back(SUBSTRATE_SIGNATURE_AARCH64);
     }
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
