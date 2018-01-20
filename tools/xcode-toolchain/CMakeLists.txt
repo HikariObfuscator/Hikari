@@ -91,6 +91,8 @@ add_custom_command(OUTPUT ${LLVMToolchainDir}/Info.plist
                   COMMAND ${CMAKE_COMMAND} -E remove ${LLVMToolchainDir}/Info.plist
                   COMMAND /usr/libexec/PlistBuddy -c "Add:CFBundleIdentifier string com.naville.hikari" "${LLVMToolchainDir}/Info.plist"
                   COMMAND /usr/libexec/PlistBuddy -c "Add:CompatibilityVersion integer ${COMPAT_VERSION}" "${LLVMToolchainDir}/Info.plist"
+                  COMMAND /usr/libexec/PlistBuddy -c "Add:DisplayName string HikariObfuscator" "${LLVMToolchainDir}/Info.plist"
+                  COMMAND /usr/libexec/PlistBuddy -c "Add:ShortDisplayName string HikariObfuscator" "${LLVMToolchainDir}/Info.plist"
                   )
 
 add_custom_target(build-xcode-toolchain
