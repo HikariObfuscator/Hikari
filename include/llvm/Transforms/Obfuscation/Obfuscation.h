@@ -7,7 +7,6 @@
 #include "llvm/Transforms/Obfuscation/FunctionCallObfuscate.h"
 #include "llvm/Transforms/Obfuscation/Substitution.h"
 #include "llvm/Transforms/Obfuscation/BogusControlFlow.h"
-#include "llvm/Transforms/Obfuscation/SymbolObfuscation.h"
 #include "llvm/Transforms/Obfuscation/Split.h"
 #include "llvm/Transforms/Obfuscation/IndirectBranch.h"
 #include "llvm/Transforms/Obfuscation/AntiHook.h"

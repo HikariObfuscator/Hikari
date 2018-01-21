@@ -160,6 +160,7 @@ char Obfuscation::ID = 0;
 INITIALIZE_PASS_BEGIN(Obfuscation, "obfus", "Enable Obfuscation", true, true)
 INITIALIZE_PASS_DEPENDENCY(AntiClassDump);
 INITIALIZE_PASS_DEPENDENCY(AntiDebugging);
+INITIALIZE_PASS_DEPENDENCY(AntiHook);
 INITIALIZE_PASS_DEPENDENCY(BogusControlFlow);
 INITIALIZE_PASS_DEPENDENCY(Flattening);
 INITIALIZE_PASS_DEPENDENCY(FunctionCallObfuscate);

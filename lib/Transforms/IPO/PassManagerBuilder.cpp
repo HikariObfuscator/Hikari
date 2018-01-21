@@ -141,9 +141,6 @@ static cl::opt<bool>
 static cl::opt<bool>
     EnableGVNSink("enable-gvn-sink", cl::init(false), cl::Hidden,
                   cl::desc("Enable the GVN sinking pass (default = off)"));
-static cl::opt<bool>
-    EnableSymbolObfuscation("enable-symobf", cl::init(false), cl::NotHidden,
-                  cl::desc("Enable Symbol Obfuscation."));
 PassManagerBuilder::PassManagerBuilder() {
   OptLevel = 2;
   SizeLevel = 0;
@@ -927,9 +924,6 @@ void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
 
   if (VerifyOutput)
     PM.add(createVerifierPass());
-  if (EnableSymbolObfuscation) {
-    PM.add(createSymbolObfuscationPass());
-  }
 }
 
 inline PassManagerBuilder *unwrap(LLVMPassManagerBuilderRef P) {

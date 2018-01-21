@@ -232,7 +232,6 @@ namespace {
       (void) llvm::createSubstitutionPass();
       (void) llvm::createAntiDebuggingPass();
       (void) llvm::createAntiHookPass();
-      (void) llvm::createSymbolObfuscationPass();
       (void) llvm::createIndirectBranchPass();
       (void) llvm::createObfuscationPass();
     }
