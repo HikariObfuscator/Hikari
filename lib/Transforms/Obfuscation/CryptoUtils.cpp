@@ -765,7 +765,6 @@ uint32_t CryptoUtils::get_range(const uint32_t max) {
     do {
       r = get_uint32_t() & mask;
     } while (r >= max);
-
     return r;
   }
 }

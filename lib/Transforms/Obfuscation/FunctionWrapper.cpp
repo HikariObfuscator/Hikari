@@ -60,7 +60,7 @@ struct FunctionWrapper : public ModulePass {
         for (inst_iterator fi = inst_begin(&F); fi != inst_end(&F); fi++) {
           Instruction *Inst = &*fi;
           if (isa<CallInst>(Inst) || isa<InvokeInst>(Inst)) {
-            if ((int)llvm::cryptoutils->get_range(100) <= ObfTimes) {
+            if ((int)llvm::cryptoutils->get_range(100) <= ProbRate) {
               callsites.push_back(new CallSite(Inst));
             }
           }
@@ -68,7 +68,7 @@ struct FunctionWrapper : public ModulePass {
       }
     }
     for (CallSite *CS : callsites) {
-      for(int i=0;i<ObfTimes && CS!=NULL;i++){
+      for(int i=0;i<ObfTimes && CS!=nullptr;i++){
         CS=HandleCallSite(CS);
       }
     }
@@ -76,14 +76,14 @@ struct FunctionWrapper : public ModulePass {
   } // End of runOnModule
   CallSite* HandleCallSite(CallSite *CS) {
     Value *calledFunction = CS->getCalledFunction();
-    if (calledFunction == NULL) {
+    if (calledFunction == nullptr) {
       calledFunction = CS->getCalledValue()->stripPointerCasts();
     }
     // Filter out IndirectCalls that depends on the context
     // Otherwise It'll be blantantly troublesome since you can't reference an
     // Instruction outside its BB  Too much trouble for a hobby project
     // To be precise, we only keep CS that refers to a non-intrinsic function either directly or through casting
-    if (calledFunction == NULL ||
+    if (calledFunction == nullptr ||
         (!isa<ConstantExpr>(calledFunction) &&
          !isa<Function>(calledFunction)) ||
         CS->getIntrinsicID() != Intrinsic::ID::not_intrinsic) {
