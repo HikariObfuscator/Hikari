@@ -59,6 +59,9 @@ static cl::opt<bool>
 static cl::opt<bool> EnableAntiHooking("enable-antihook", cl::init(false),
                                        cl::NotHidden,
                                        cl::desc("Enable Indirect Branching."));
+static cl::opt<bool>
+    EnableFunctionWrapper("enable-funcwra", cl::init(false), cl::NotHidden,
+                          cl::desc("Enable Function Wrapper."));
 // End Obfuscator Options
 namespace llvm {
 struct Obfuscation : public ModulePass {
@@ -133,17 +136,22 @@ struct Obfuscation : public ModulePass {
       }
     }
 
-    //Post-Run Clean-up part
+    // Post-Run Clean-up part
     if (EnableAllObfuscation || EnableIndirectBranching) {
       FunctionPass *P = createIndirectBranchPass();
       P->doInitialization(M);
-      vector<Function*> funcs;
+      vector<Function *> funcs;
       for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
         funcs.push_back(&*iter);
       }
-      for(Function *F:funcs){
+      for (Function *F : funcs) {
         P->runOnFunction(*F);
       }
+      delete P;
+    }
+    if (EnableAllObfuscation || EnableFunctionWrapper) {
+      ModulePass *P = createFunctionWrapperPass();
+      P->runOnModule(M);
       delete P;
     }
     return true;

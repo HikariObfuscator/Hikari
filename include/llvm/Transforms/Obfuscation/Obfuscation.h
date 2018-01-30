@@ -10,6 +10,7 @@
 #include "llvm/Transforms/Obfuscation/Split.h"
 #include "llvm/Transforms/Obfuscation/IndirectBranch.h"
 #include "llvm/Transforms/Obfuscation/AntiHook.h"
+#include "llvm/Transforms/Obfuscation/FunctionWrapper.h"
 using namespace std;
 using namespace llvm;
 

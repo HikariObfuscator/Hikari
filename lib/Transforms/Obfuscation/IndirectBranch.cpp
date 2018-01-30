@@ -39,8 +39,8 @@ struct IndirectBranch : public FunctionPass {
     unsigned long long i = 0;
     for (auto F = M.begin(); F != M.end(); F++) {
       for (auto BB = F->begin(); BB != F->end(); BB++) {
-        BasicBlock *BBPtr=&*BB;
-        if(BBPtr!=&(BBPtr->getParent()->getEntryBlock())){
+        BasicBlock *BBPtr = &*BB;
+        if (BBPtr != &(BBPtr->getParent()->getEntryBlock())) {
           indexmap[BBPtr] = i++;
           BBs.push_back(BlockAddress::get(BBPtr));
         }
@@ -85,7 +85,8 @@ struct IndirectBranch : public FunctionPass {
       }
       GlobalVariable *LoadFrom = NULL;
 
-      if (BI->isConditional() || indexmap.find(BI->getSuccessor(0))==indexmap.end()) {
+      if (BI->isConditional() ||
+          indexmap.find(BI->getSuccessor(0)) == indexmap.end()) {
         // Create a new GV
         Constant *BlockAddressArray =
             ConstantArray::get(AT, ArrayRef<Constant *>(BlockAddresses));
@@ -93,8 +94,8 @@ struct IndirectBranch : public FunctionPass {
                                       GlobalValue::LinkageTypes::PrivateLinkage,
                                       BlockAddressArray);
       } else {
-        LoadFrom =
-            Func.getParent()->getGlobalVariable("IndirectBranchingGlobalTable",true);
+        LoadFrom = Func.getParent()->getGlobalVariable(
+            "IndirectBranchingGlobalTable", true);
       }
       Value *index = NULL;
       if (BI->isConditional()) {

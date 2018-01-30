@@ -11,6 +11,7 @@ add_llvm_library(LLVMObfuscation
   StringEncryption.cpp
   IndirectBranch.cpp
   AntiHooking.cpp
+  FunctionWrapper.cpp
   Obfuscation.cpp
   DEPENDS
   intrinsics_gen

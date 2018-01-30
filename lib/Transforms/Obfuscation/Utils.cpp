@@ -102,8 +102,8 @@ bool toObfuscate(bool flag, Function *f, std::string attribute) {
   // FIXME: IIRC Clang's CGObjCMac.cpp doesn't support inserting annotations for
   // ObjC Code
   // That's exactly why O-LLVM's annotations Doesn't work on ObjC
-  // classes/methods  We just force return true here.Unless someone is willing to
-  // fix CFE properly
+  // classes/methods  We just force return true here.Unless someone is willing
+  // to fix CFE properly
 
   return true;
 }
