@@ -43,7 +43,7 @@ static cl::opt<int>
 static cl::opt<int> ObfTimes(
     "fw_times",
     cl::desc(
-        "Choose how many time the FunctionWrapper pass loop on a function"),
+        "Choose how many time the FunctionWrapper pass loop on a CallSite"),
     cl::value_desc("Number of Times"), cl::init(3), cl::Optional);
 namespace llvm {
 struct FunctionWrapper : public ModulePass {
