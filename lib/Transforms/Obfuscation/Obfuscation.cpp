@@ -108,11 +108,15 @@ struct Obfuscation : public ModulePass {
       P->runOnModule(M);
       delete P;
     }
+    /*
+    // Placing FW here does provide the most obfuscation however the compile time
+    // and product size would be literally unbearable for any large project
+    // Move it to post run
     if (EnableAllObfuscation || EnableFunctionWrapper) {
       ModulePass *P = createFunctionWrapperPass();
       P->runOnModule(M);
       delete P;
-    }
+    }*/
     // Now perform Function-Level Obfuscation
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
       Function &F = *iter;
@@ -152,6 +156,11 @@ struct Obfuscation : public ModulePass {
       for (Function *F : funcs) {
         P->runOnFunction(*F);
       }
+      delete P;
+    }
+    if (EnableAllObfuscation || EnableFunctionWrapper) {
+      ModulePass *P = createFunctionWrapperPass();
+      P->runOnModule(M);
       delete P;
     }
     return true;
