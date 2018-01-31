@@ -49,7 +49,9 @@ namespace llvm {
 struct FunctionCallObfuscate : public FunctionPass {
   static char ID;
   json Configuration;
-  FunctionCallObfuscate() : FunctionPass(ID) {}
+  bool flag;
+  FunctionCallObfuscate() : FunctionPass(ID) { this->flag = true; }
+  FunctionCallObfuscate(bool flag) : FunctionPass(ID) { this->flag = flag; }
   StringRef getPassName() const override {
     return StringRef("FunctionCallObfuscate");
   }
@@ -215,6 +217,9 @@ struct FunctionCallObfuscate : public FunctionPass {
   }
   virtual bool runOnFunction(Function &F) override {
     // Construct Function Prototypes
+    if (toObfuscate(flag, &F, "fco") == false) {
+      return false;
+    }
     Module *M = F.getParent();
     HandleObjC(*M);
     Type *Int32Ty = Type::getInt32Ty(M->getContext());
@@ -307,6 +312,9 @@ struct FunctionCallObfuscate : public FunctionPass {
 };
 FunctionPass *createFunctionCallObfuscatePass() {
   return new FunctionCallObfuscate();
+}
+FunctionPass *createFunctionCallObfuscatePass(bool flag) {
+  return new FunctionCallObfuscate(flag);
 }
 } // namespace llvm
 char FunctionCallObfuscate::ID = 0;

@@ -30,6 +30,7 @@
 // Namespace
 namespace llvm {
 	FunctionPass *createSplitBasicBlockPass();
+	FunctionPass *createSplitBasicBlockPass(bool flag);
 	void initializeSplitBasicBlockPass(PassRegistry &Registry);
 }
 #endif

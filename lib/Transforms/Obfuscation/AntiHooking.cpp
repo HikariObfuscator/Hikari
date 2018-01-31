@@ -49,7 +49,9 @@ using namespace std;
 namespace llvm {
 struct AntiHook : public ModulePass {
   static char ID;
-  AntiHook() : ModulePass(ID) {}
+  bool flag;
+  AntiHook() : ModulePass(ID) { this->flag = true; }
+  AntiHook(bool flag) : ModulePass(ID) { this->flag = flag; }
   StringRef getPassName() const override { return StringRef("AntiHook"); }
   virtual bool doInitialization(Module &M) override {
     if (PreCompiledIRPath == "") {
@@ -86,7 +88,7 @@ struct AntiHook : public ModulePass {
     }
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
       Function &F = *iter;
-      if (!F.isDeclaration()) {
+      if (toObfuscate(flag, &F, "antihook")) {
 
         // Analyze CallInst And InvokeInst
         vector<Function *> calledFunctions;
@@ -196,5 +198,6 @@ struct AntiHook : public ModulePass {
 };
 } // namespace llvm
 ModulePass *llvm::createAntiHookPass() { return new AntiHook(); }
+ModulePass *llvm::createAntiHookPass(bool flag) { return new AntiHook(flag); }
 char AntiHook::ID = 0;
 INITIALIZE_PASS(AntiHook, "antihook", "AntiHook", true, true)

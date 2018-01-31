@@ -48,7 +48,9 @@ static cl::opt<int> ObfTimes(
 namespace llvm {
 struct FunctionWrapper : public ModulePass {
   static char ID;
-  FunctionWrapper() : ModulePass(ID) {}
+  bool flag;
+  FunctionWrapper() : ModulePass(ID) { this->flag = true; }
+  FunctionWrapper(bool flag) : ModulePass(ID) { this->flag = flag; }
   StringRef getPassName() const override {
     return StringRef("FunctionWrapper");
   }
@@ -56,7 +58,8 @@ struct FunctionWrapper : public ModulePass {
     vector<CallSite *> callsites;
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
       Function &F = *iter;
-      if (!F.isDeclaration()) {
+      if (toObfuscate(flag, &F, "fw")) {
+        errs() << "Running FunctionWrapper On " << F.getName() << "\n";
         for (inst_iterator fi = inst_begin(&F); fi != inst_end(&F); fi++) {
           Instruction *Inst = &*fi;
           if (isa<CallInst>(Inst) || isa<InvokeInst>(Inst)) {
@@ -68,13 +71,13 @@ struct FunctionWrapper : public ModulePass {
       }
     }
     for (CallSite *CS : callsites) {
-      for(int i=0;i<ObfTimes && CS!=nullptr;i++){
-        CS=HandleCallSite(CS);
+      for (int i = 0; i < ObfTimes && CS != nullptr; i++) {
+        CS = HandleCallSite(CS);
       }
     }
     return true;
   } // End of runOnModule
-  CallSite* HandleCallSite(CallSite *CS) {
+  CallSite *HandleCallSite(CallSite *CS) {
     Value *calledFunction = CS->getCalledFunction();
     if (calledFunction == nullptr) {
       calledFunction = CS->getCalledValue()->stripPointerCasts();
@@ -82,7 +85,8 @@ struct FunctionWrapper : public ModulePass {
     // Filter out IndirectCalls that depends on the context
     // Otherwise It'll be blantantly troublesome since you can't reference an
     // Instruction outside its BB  Too much trouble for a hobby project
-    // To be precise, we only keep CS that refers to a non-intrinsic function either directly or through casting
+    // To be precise, we only keep CS that refers to a non-intrinsic function
+    // either directly or through casting
     if (calledFunction == nullptr ||
         (!isa<ConstantExpr>(calledFunction) &&
          !isa<Function>(calledFunction)) ||
@@ -105,7 +109,7 @@ struct FunctionWrapper : public ModulePass {
     BasicBlock *BB = BasicBlock::Create(func->getContext(), "", func);
     IRBuilder<> IRB(BB);
     vector<Value *> params;
-    for (auto arg=func->arg_begin();arg!=func->arg_end();arg++) {
+    for (auto arg = func->arg_begin(); arg != func->arg_end(); arg++) {
       params.push_back(arg);
     }
     Value *retval = IRB.CreateCall(calledFunction, ArrayRef<Value *>(params));
@@ -115,12 +119,15 @@ struct FunctionWrapper : public ModulePass {
       IRB.CreateRet(retval);
     }
     CS->setCalledFunction(func);
-    Instruction *Inst=CS->getInstruction();
+    Instruction *Inst = CS->getInstruction();
     delete CS;
     return new CallSite(Inst);
   }
 };
 ModulePass *createFunctionWrapperPass() { return new FunctionWrapper(); }
+ModulePass *createFunctionWrapperPass(bool flag) {
+  return new FunctionWrapper(flag);
+}
 } // namespace llvm
 
 char FunctionWrapper::ID = 0;

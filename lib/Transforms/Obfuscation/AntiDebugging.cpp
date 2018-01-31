@@ -15,7 +15,6 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "llvm/Transforms/Obfuscation/AntiDebugging.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -32,6 +31,7 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Obfuscation/Obfuscation.h"
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -46,7 +46,9 @@ static cl::opt<string> PreCompiledIRPath(
 namespace llvm {
 struct AntiDebugging : public ModulePass {
   static char ID;
-  AntiDebugging() : ModulePass(ID) {}
+  bool flag;
+  AntiDebugging() : ModulePass(ID) { this->flag = true; }
+  AntiDebugging(bool flag) : ModulePass(ID) { this->flag = flag; }
   StringRef getPassName() const override { return StringRef("AntiDebugging"); }
   virtual bool doInitialization(Module &M) override {
     if (PreCompiledIRPath == "") {
@@ -102,7 +104,7 @@ struct AntiDebugging : public ModulePass {
     }
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
       Function &F = *iter;
-      if (!F.isDeclaration() && F.getName() != "ADBCallBack" &&
+      if (toObfuscate(flag, &F, "adb") && F.getName() != "ADBCallBack" &&
           F.getName() != "InitADB") {
         runOnFunction(F);
       }
@@ -122,6 +124,9 @@ struct AntiDebugging : public ModulePass {
   }
 };
 ModulePass *createAntiDebuggingPass() { return new AntiDebugging(); }
+ModulePass *createAntiDebuggingPass(bool flag) {
+  return new AntiDebugging(flag);
+}
 } // namespace llvm
 
 char AntiDebugging::ID = 0;

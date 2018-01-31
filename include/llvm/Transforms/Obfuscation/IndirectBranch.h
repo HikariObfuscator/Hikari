@@ -8,6 +8,7 @@ using namespace llvm;
 // Namespace
 namespace llvm {
 	FunctionPass* createIndirectBranchPass();
+	FunctionPass* createIndirectBranchPass(bool flag);
 	void initializeIndirectBranchPass(PassRegistry &Registry);
 }
 #endif

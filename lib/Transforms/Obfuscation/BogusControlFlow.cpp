@@ -156,7 +156,9 @@ static CmpInst::Predicate preds[] = {CmpInst::ICMP_EQ,  CmpInst::ICMP_NE,
 namespace {
 struct BogusControlFlow : public FunctionPass {
   static char ID; // Pass identification
-  BogusControlFlow() : FunctionPass(ID) {}
+  bool flag;
+  BogusControlFlow() : FunctionPass(ID) { this->flag = true; }
+  BogusControlFlow(bool flag) : FunctionPass(ID) { this->flag = flag; }
   /* runOnFunction
    *
    * Overwrite FunctionPass method to apply the transformation
@@ -176,7 +178,7 @@ struct BogusControlFlow : public FunctionPass {
       return false;
     }
     // If fla annotations
-    if (toObfuscate(true, &F, "bcf")) {
+    if (toObfuscate(flag, &F, "bcf")) {
       bogus(F);
       doF(*F.getParent());
       return true;
@@ -749,4 +751,7 @@ INITIALIZE_PASS(BogusControlFlow, "bcfobf", "Enable BogusControlFlow.", true,
                 true)
 FunctionPass *llvm::createBogusControlFlowPass() {
   return new BogusControlFlow();
+}
+FunctionPass *llvm::createBogusControlFlowPass(bool flag) {
+  return new BogusControlFlow(flag);
 }

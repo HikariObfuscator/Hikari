@@ -31,8 +31,10 @@ using namespace std;
 namespace llvm {
 struct IndirectBranch : public FunctionPass {
   static char ID;
+  bool flag;
   map<BasicBlock *, unsigned long long> indexmap;
-  IndirectBranch() : FunctionPass(ID) {}
+  IndirectBranch() : FunctionPass(ID) { this->flag = true; }
+  IndirectBranch(bool flag) : FunctionPass(ID) { this->flag = flag; }
   StringRef getPassName() const override { return StringRef("IndirectBranch"); }
   bool doInitialization(Module &M) override {
     vector<Constant *> BBs;
@@ -55,7 +57,7 @@ struct IndirectBranch : public FunctionPass {
     return true;
   }
   bool runOnFunction(Function &Func) override {
-    if (Func.isDeclaration()) {
+    if (toObfuscate(flag, &Func, "indibr")) {
       return false;
     }
     vector<BranchInst *> BIs;
@@ -120,5 +122,8 @@ struct IndirectBranch : public FunctionPass {
 };
 } // namespace llvm
 FunctionPass *llvm::createIndirectBranchPass() { return new IndirectBranch(); }
+FunctionPass *llvm::createIndirectBranchPass(bool flag) {
+  return new IndirectBranch(flag);
+}
 char IndirectBranch::ID = 0;
 INITIALIZE_PASS(IndirectBranch, "indibran", "IndirectBranching", true, true)

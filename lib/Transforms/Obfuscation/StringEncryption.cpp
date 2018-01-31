@@ -29,6 +29,7 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Obfuscation/CryptoUtils.h"
 #include "llvm/Transforms/Obfuscation/Obfuscation.h"
+#include "llvm/Transforms/Obfuscation/Utils.h"
 #include <cstdlib>
 #include <iostream>
 #include <map>
@@ -41,7 +42,9 @@ struct StringEncryption : public ModulePass {
   static char ID;
   map<Function * /*Function*/, GlobalVariable * /*Decryption Status*/>
       encstatus;
-  StringEncryption() : ModulePass(ID) {}
+  bool flag;
+  StringEncryption() : ModulePass(ID) { this->flag = true; }
+  StringEncryption(bool flag) : ModulePass(ID) { this->flag = flag; }
   StringRef getPassName() const override {
     return StringRef("StringEncryption");
   }
@@ -51,7 +54,7 @@ struct StringEncryption : public ModulePass {
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
       Function *F = &(*iter);
 
-      if (!F->isDeclaration()) {
+      if (toObfuscate(flag, F, "strenc")) {
         Constant *S = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
         GlobalVariable *GV = new GlobalVariable(
             M, S->getType(), false, GlobalValue::LinkageTypes::PrivateLinkage,
@@ -318,6 +321,9 @@ struct StringEncryption : public ModulePass {
   }
 };
 ModulePass *createStringEncryptionPass() { return new StringEncryption(); }
+ModulePass *createStringEncryptionPass(bool flag) {
+  return new StringEncryption(flag);
+}
 } // namespace llvm
 
 char StringEncryption::ID = 0;

@@ -1,4 +1,5 @@
 #include "llvm/Transforms/Obfuscation/Utils.h"
+#include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
 #include <sstream>
@@ -97,6 +98,24 @@ std::string readAnnotate(Function *f) {
   return annotation;
 }
 
+// Unlike O-LLVM which uses __attribute__ that is not supported by the ObjC CFE.
+// We use a dummy call here and remove the call later
+// Very dumb and definitely slower than the function attribute method
+// Merely a hack
+bool readFlag(Function *f, std::string attribute) {
+  for (inst_iterator I = inst_begin(f); I != inst_end(f); I++) {
+    Instruction *Inst = &*I;
+    if (CallInst *CI = dyn_cast<CallInst>(Inst)) {
+      if (CI->getCalledFunction() != nullptr &&
+          CI->getCalledFunction()->getName().contains("hikari_" + attribute)) {
+        errs() << "Found Call:" << *CI << "\n";
+        CI->eraseFromParent();
+        return true;
+      }
+    }
+  }
+  return false;
+}
 bool toObfuscate(bool flag, Function *f, std::string attribute) {
 
   // FIXME: IIRC Clang's CGObjCMac.cpp doesn't support inserting annotations for
@@ -105,5 +124,30 @@ bool toObfuscate(bool flag, Function *f, std::string attribute) {
   // classes/methods  We just force return true here.Unless someone is willing
   // to fix CFE properly
 
-  return true;
+  // Check if declaration
+  if (f->isDeclaration()) {
+    return false;
+  }
+  // Check external linkage
+  if (f->hasAvailableExternallyLinkage() != 0) {
+    return false;
+  }
+  if (flag == true) {
+    return true;
+  }
+  std::string attr = attribute;
+  std::string attrNo = "no" + attr;
+  // We have to check the nofla flag first
+  // Because .find("fla") is true for a string like "fla" or
+  // "nofla"
+  if (readAnnotate(f).find(attrNo) != std::string::npos ||
+      readFlag(f, attrNo)) {
+    return false;
+  }
+
+  // If fla annotations
+  if (readAnnotate(f).find(attr) != std::string::npos || readFlag(f, attr)) {
+    return true;
+  }
+  return false;
 }

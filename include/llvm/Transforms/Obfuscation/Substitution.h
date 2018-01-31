@@ -31,6 +31,7 @@ using namespace std;
 
 namespace llvm {
 	FunctionPass *createSubstitutionPass();
+	FunctionPass *createSubstitutionPass(bool flag);
 	void initializeSubstitutionPass(PassRegistry &Registry);
 }
 

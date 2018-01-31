@@ -73,48 +73,45 @@ struct Obfuscation : public ModulePass {
   bool runOnModule(Module &M) override {
     // Initial ACD Pass
     if (EnableAllObfuscation || EnableAntiClassDump) {
-      errs()<<"Running AntiClassDump On "<<M.getSourceFileName()<<"\n";
+      errs() << "Running AntiClassDump On " << M.getSourceFileName() << "\n";
       ModulePass *P = createAntiClassDumpPass();
       P->doInitialization(M);
       P->runOnModule(M);
       delete P;
     }
     // Now do FCO
-    if (EnableAllObfuscation || EnableFunctionCallObfuscate) {
-      errs()<<"Running FunctionCallObfuscate On "<<M.getSourceFileName()<<"\n";
-      FunctionPass *P = createFunctionCallObfuscatePass();
-      P->doInitialization(M);
-      for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
-        Function &F = *iter;
-        if (!F.isDeclaration()) {
-          P->runOnFunction(F);
-        }
+    errs() << "Running FunctionCallObfuscate On " << M.getSourceFileName()
+           << "\n";
+    FunctionPass *FP = createFunctionCallObfuscatePass(
+        EnableAllObfuscation || EnableFunctionCallObfuscate);
+    FP->doInitialization(M);
+    for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
+      Function &F = *iter;
+      if (!F.isDeclaration()) {
+        FP->runOnFunction(F);
       }
-      delete P;
     }
-    if (EnableAllObfuscation || EnableAntiHooking) {
-      errs()<<"Running AntiHooking On "<<M.getSourceFileName()<<"\n";
-      ModulePass *P = createAntiHookPass();
-      P->doInitialization(M);
-      P->runOnModule(M);
-      delete P;
-    }
-    if (EnableAllObfuscation || EnableAntiDebugging) {
-      errs()<<"Running AntiDebugging On "<<M.getSourceFileName()<<"\n";
-      ModulePass *P = createAntiDebuggingPass();
-      P->doInitialization(M);
-      P->runOnModule(M);
-      delete P;
-    }
-    if (EnableAllObfuscation || EnableStringEncryption) {
-      // Now Encrypt Strings
-      errs()<<"Running StringEncryption On "<<M.getSourceFileName()<<"\n";
-      ModulePass *P = createStringEncryptionPass();
-      P->runOnModule(M);
-      delete P;
-    }
+    delete FP;
+    errs() << "Running AntiHooking On " << M.getSourceFileName() << "\n";
+    ModulePass *MP =
+        createAntiHookPass(EnableAllObfuscation || EnableAntiHooking);
+    MP->doInitialization(M);
+    MP->runOnModule(M);
+    delete MP;
+    errs() << "Running AntiDebugging On " << M.getSourceFileName() << "\n";
+    MP = createAntiDebuggingPass(EnableAllObfuscation || EnableAntiDebugging);
+    MP->doInitialization(M);
+    MP->runOnModule(M);
+    delete MP;
+    // Now Encrypt Strings
+    errs() << "Running StringEncryption On " << M.getSourceFileName() << "\n";
+    MP = createStringEncryptionPass(EnableAllObfuscation ||
+                                    EnableStringEncryption);
+    MP->runOnModule(M);
+    delete MP;
     /*
-    // Placing FW here does provide the most obfuscation however the compile time
+    // Placing FW here does provide the most obfuscation however the compile
+    time
     // and product size would be literally unbearable for any large project
     // Move it to post run
     if (EnableAllObfuscation || EnableFunctionWrapper) {
@@ -127,53 +124,61 @@ struct Obfuscation : public ModulePass {
       Function &F = *iter;
       if (!F.isDeclaration()) {
         FunctionPass *P = NULL;
-        if (EnableAllObfuscation || EnableBasicBlockSplit) {
-          errs()<<"Running BasicBlockSplit On "<<M.getSourceFileName()<<"\n";
-          P = createSplitBasicBlockPass();
-          P->runOnFunction(F);
-          delete P;
-        }
-        if (EnableAllObfuscation || EnableBogusControlFlow) {
-          errs()<<"Running BogusControlFlow On "<<M.getSourceFileName()<<"\n";
-          P = createBogusControlFlowPass();
-          P->runOnFunction(F);
-          delete P;
-        }
-        if (EnableAllObfuscation || EnableFlattening) {
-          errs()<<"Running ControlFlowFlattening On "<<M.getSourceFileName()<<"\n";
-          P = createFlatteningPass();
-          P->runOnFunction(F);
-          delete P;
-        }
-        if (EnableAllObfuscation || EnableSubstitution) {
-          errs()<<"Running Instruction Substitution On "<<M.getSourceFileName()<<"\n";
-          P = createSubstitutionPass();
-          P->runOnFunction(F);
-          delete P;
-        }
+        errs() << "Running BasicBlockSplit On " << F.getName() << "\n";
+        P = createSplitBasicBlockPass(EnableAllObfuscation ||
+                                      EnableBasicBlockSplit);
+        P->runOnFunction(F);
+        delete P;
+        errs() << "Running BogusControlFlow On " << F.getName() << "\n";
+        P = createBogusControlFlowPass(EnableAllObfuscation ||
+                                       EnableBogusControlFlow);
+        P->runOnFunction(F);
+        delete P;
+        errs() << "Running ControlFlowFlattening On " << F.getName() << "\n";
+        P = createFlatteningPass(EnableAllObfuscation || EnableFlattening);
+        P->runOnFunction(F);
+        delete P;
+        errs() << "Running Instruction Substitution On " << F.getName() << "\n";
+        P = createSubstitutionPass(EnableAllObfuscation || EnableSubstitution);
+        P->runOnFunction(F);
+        delete P;
       }
     }
-
-    // Post-Run Clean-up part
-    if (EnableAllObfuscation || EnableIndirectBranching) {
-      errs()<<"Running IndirectBranch On "<<M.getSourceFileName()<<"\n";
-      FunctionPass *P = createIndirectBranchPass();
-      P->doInitialization(M);
-      vector<Function *> funcs;
-      for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
-        funcs.push_back(&*iter);
-      }
-      for (Function *F : funcs) {
-        P->runOnFunction(*F);
-      }
-      delete P;
+    errs() << "Doing Post-Run Cleanup\n";
+    errs() << "Running IndirectBranch On " << M.getSourceFileName() << "\n";
+    FunctionPass *P = createIndirectBranchPass(EnableAllObfuscation ||
+                                               EnableIndirectBranching);
+    P->doInitialization(M);
+    vector<Function *> funcs;
+    for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
+      funcs.push_back(&*iter);
     }
-    if (EnableAllObfuscation || EnableFunctionWrapper) {
-      errs()<<"Running FunctionWrapper On "<<M.getSourceFileName()<<"\n";
-      ModulePass *P = createFunctionWrapperPass();
-      P->runOnModule(M);
-      delete P;
+    for (Function *F : funcs) {
+      P->runOnFunction(*F);
     }
+    delete P;
+    MP = createFunctionWrapperPass(EnableAllObfuscation ||
+                                   EnableFunctionWrapper);
+    MP->runOnModule(M);
+    delete MP;
+    // Cleanup Flags
+    vector<Function *> toDelete;
+    for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
+      Function &F = *iter;
+      if (F.isDeclaration() && F.hasName() &&
+          F.getName().startswith("hikari_")) {
+        for (User *U : F.users()) {
+          if (Instruction *Inst = dyn_cast<Instruction>(U)) {
+            Inst->eraseFromParent();
+          }
+        }
+        toDelete.push_back(&F);
+      }
+    }
+    for (Function *F : toDelete) {
+      F->eraseFromParent();
+    }
+    errs() << "Hikari Out\n";
     return true;
   } // End runOnModule
 };

@@ -25,20 +25,25 @@ STATISTIC(Flattened, "Functions flattened");
 namespace {
 struct Flattening : public FunctionPass {
   static char ID; // Pass identification, replacement for typeid
-  Flattening() : FunctionPass(ID) {}
+  bool flag;
+  Flattening() : FunctionPass(ID) { this->flag = true; }
+  Flattening(bool flag) : FunctionPass(ID) { this->flag = flag; }
   bool runOnFunction(Function &F);
   bool flatten(Function *f);
 };
 } // namespace
 
 char Flattening::ID = 0;
+FunctionPass *llvm::createFlatteningPass(bool flag) {
+  return new Flattening(flag);
+}
 FunctionPass *llvm::createFlatteningPass() { return new Flattening(); }
 INITIALIZE_PASS(Flattening, "cffobf", "Enable Control Flow Flattening.", true,
                 true)
 bool Flattening::runOnFunction(Function &F) {
   Function *tmp = &F;
   // Do we obfuscate
-  if (toObfuscate(true, tmp, "fla")) {
+  if (toObfuscate(flag, tmp, "fla")) {
     if (flatten(tmp)) {
       ++Flattened;
     }

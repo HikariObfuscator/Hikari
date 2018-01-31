@@ -7,6 +7,7 @@ using namespace llvm;
 // Namespace
 namespace llvm {
 	ModulePass* createAntiHookPass();
+	ModulePass* createAntiHookPass(bool flag);
 	void initializeAntiHookPass(PassRegistry &Registry);
 }
 #endif

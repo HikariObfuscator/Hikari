@@ -7,6 +7,7 @@ using namespace llvm;
 // Namespace
 namespace llvm {
 	ModulePass* createFunctionWrapperPass();
+	ModulePass* createFunctionWrapperPass(bool flag);
 	void initializeFunctionWrapperPass(PassRegistry &Registry);
 }
 #endif
