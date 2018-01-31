@@ -117,12 +117,6 @@ bool readFlag(Function *f, std::string attribute) {
 }
 bool toObfuscate(bool flag, Function *f, std::string attribute) {
 
-  // FIXME: IIRC Clang's CGObjCMac.cpp doesn't support inserting annotations for
-  // ObjC Code
-  // That's exactly why O-LLVM's annotations Doesn't work on ObjC
-  // classes/methods  We just force return true here.Unless someone is willing
-  // to fix CFE properly
-
   // Check if declaration
   if (f->isDeclaration()) {
     return false;
@@ -130,9 +124,6 @@ bool toObfuscate(bool flag, Function *f, std::string attribute) {
   // Check external linkage
   if (f->hasAvailableExternallyLinkage() != 0) {
     return false;
-  }
-  if (flag == true) {
-    return true;
   }
   std::string attr = attribute;
   std::string attrNo = "no" + attr;
@@ -143,9 +134,10 @@ bool toObfuscate(bool flag, Function *f, std::string attribute) {
       readFlag(f, attrNo)) {
     return false;
   }
-
-  // If fla annotations
   if (readAnnotate(f).find(attr) != std::string::npos || readFlag(f, attr)) {
+    return true;
+  }
+  if (flag == true) {
     return true;
   }
   return false;
