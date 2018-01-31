@@ -93,6 +93,12 @@ struct FunctionWrapper : public ModulePass {
         CS->getIntrinsicID() != Intrinsic::ID::not_intrinsic) {
       return nullptr;
     }
+    if(Function *tmp=dyn_cast<Function>(calledFunction)){
+      if(tmp->getName().startswith("clang.")){
+        //Clang Intrinsic
+        return nullptr;
+      }
+    }
     // Create a new function which in turn calls the actual function
     vector<Type *> types;
     for (unsigned i = 0; i < CS->getNumArgOperands(); i++) {
