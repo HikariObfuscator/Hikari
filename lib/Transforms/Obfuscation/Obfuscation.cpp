@@ -155,7 +155,7 @@ struct Obfuscation : public ModulePass {
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
       Function &F = *iter;
       if (F.isDeclaration() && F.hasName() &&
-          F.getName().startswith("hikari_")) {
+          F.getName().contains("hikari_")) {
         for (User *U : F.users()) {
           if (Instruction *Inst = dyn_cast<Instruction>(U)) {
             Inst->eraseFromParent();
