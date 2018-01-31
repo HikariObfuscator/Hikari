@@ -73,15 +73,12 @@ struct Obfuscation : public ModulePass {
   bool runOnModule(Module &M) override {
     // Initial ACD Pass
     if (EnableAllObfuscation || EnableAntiClassDump) {
-      errs() << "Running AntiClassDump On " << M.getSourceFileName() << "\n";
       ModulePass *P = createAntiClassDumpPass();
       P->doInitialization(M);
       P->runOnModule(M);
       delete P;
     }
     // Now do FCO
-    errs() << "Running FunctionCallObfuscate On " << M.getSourceFileName()
-           << "\n";
     FunctionPass *FP = createFunctionCallObfuscatePass(
         EnableAllObfuscation || EnableFunctionCallObfuscate);
     FP->doInitialization(M);
@@ -92,19 +89,16 @@ struct Obfuscation : public ModulePass {
       }
     }
     delete FP;
-    errs() << "Running AntiHooking On " << M.getSourceFileName() << "\n";
     ModulePass *MP =
         createAntiHookPass(EnableAllObfuscation || EnableAntiHooking);
     MP->doInitialization(M);
     MP->runOnModule(M);
     delete MP;
-    errs() << "Running AntiDebugging On " << M.getSourceFileName() << "\n";
     MP = createAntiDebuggingPass(EnableAllObfuscation || EnableAntiDebugging);
     MP->doInitialization(M);
     MP->runOnModule(M);
     delete MP;
     // Now Encrypt Strings
-    errs() << "Running StringEncryption On " << M.getSourceFileName() << "\n";
     MP = createStringEncryptionPass(EnableAllObfuscation ||
                                     EnableStringEncryption);
     MP->runOnModule(M);
@@ -124,28 +118,23 @@ struct Obfuscation : public ModulePass {
       Function &F = *iter;
       if (!F.isDeclaration()) {
         FunctionPass *P = NULL;
-        errs() << "Running BasicBlockSplit On " << F.getName() << "\n";
         P = createSplitBasicBlockPass(EnableAllObfuscation ||
                                       EnableBasicBlockSplit);
         P->runOnFunction(F);
         delete P;
-        errs() << "Running BogusControlFlow On " << F.getName() << "\n";
         P = createBogusControlFlowPass(EnableAllObfuscation ||
                                        EnableBogusControlFlow);
         P->runOnFunction(F);
         delete P;
-        errs() << "Running ControlFlowFlattening On " << F.getName() << "\n";
         P = createFlatteningPass(EnableAllObfuscation || EnableFlattening);
         P->runOnFunction(F);
         delete P;
-        errs() << "Running Instruction Substitution On " << F.getName() << "\n";
         P = createSubstitutionPass(EnableAllObfuscation || EnableSubstitution);
         P->runOnFunction(F);
         delete P;
       }
     }
     errs() << "Doing Post-Run Cleanup\n";
-    errs() << "Running IndirectBranch On " << M.getSourceFileName() << "\n";
     FunctionPass *P = createIndirectBranchPass(EnableAllObfuscation ||
                                                EnableIndirectBranching);
     P->doInitialization(M);

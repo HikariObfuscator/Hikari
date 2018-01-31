@@ -63,6 +63,7 @@ bool SplitBasicBlock::runOnFunction(Function &F) {
 
   // Do we obfuscate
   if (toObfuscate(flag, tmp, "split")) {
+    errs() << "Running BasicBlockSplit On " << tmp->getName() << "\n";
     split(tmp);
     ++Split;
   }

@@ -81,6 +81,7 @@ struct AntiHook : public ModulePass {
     return true;
   }
   bool runOnModule(Module &M) override {
+    errs() << "Running AntiHooking On " << M.getSourceFileName() << "\n";
     Triple tri(M.getTargetTriple());
     vector<unsigned long long> signatures;
     if (tri.getArch() == Triple::ArchType::aarch64) {

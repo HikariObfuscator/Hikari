@@ -141,6 +141,7 @@ struct AntiClassDump : public ModulePass {
     return true;
   }
   bool runOnModule(Module &M) override {
+    errs() << "Running AntiClassDump On " << M.getSourceFileName() << "\n";
     GlobalVariable *OLCGV = M.getGlobalVariable("OBJC_LABEL_CLASS_$", true);
     if (OLCGV == NULL) {
       errs() << "No ObjC Class Found in :" << M.getSourceFileName() << "\n";

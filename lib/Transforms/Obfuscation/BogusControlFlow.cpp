@@ -179,6 +179,7 @@ struct BogusControlFlow : public FunctionPass {
     }
     // If fla annotations
     if (toObfuscate(flag, &F, "bcf")) {
+      errs() << "Running BogusControlFlow On " << F.getName() << "\n";
       bogus(F);
       doF(*F.getParent());
       return true;

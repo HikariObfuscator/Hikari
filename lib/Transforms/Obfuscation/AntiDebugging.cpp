@@ -81,6 +81,7 @@ struct AntiDebugging : public ModulePass {
     }
   }
   bool runOnModule(Module &M) override {
+    errs() << "Running AntiDebugging On " << M.getSourceFileName() << "\n";
     Function *ADBCallBack = M.getFunction("ADBCallBack");
     if (ADBCallBack) {
       assert(!ADBCallBack->isDeclaration() &&

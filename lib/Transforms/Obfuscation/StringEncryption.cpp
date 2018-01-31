@@ -55,6 +55,7 @@ struct StringEncryption : public ModulePass {
       Function *F = &(*iter);
 
       if (toObfuscate(flag, F, "strenc")) {
+        errs() << "Running StringEncryption On " << F->getName() << "\n";
         Constant *S = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
         GlobalVariable *GV = new GlobalVariable(
             M, S->getType(), false, GlobalValue::LinkageTypes::PrivateLinkage,

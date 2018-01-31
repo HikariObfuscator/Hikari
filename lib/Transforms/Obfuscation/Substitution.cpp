@@ -114,6 +114,7 @@ bool Substitution::runOnFunction(Function &F) {
   Function *tmp = &F;
   // Do we obfuscate
   if (toObfuscate(flag, tmp, "sub")) {
+    errs() << "Running Instruction Substitution On " << F.getName() << "\n";
     substitute(tmp);
     return true;
   }

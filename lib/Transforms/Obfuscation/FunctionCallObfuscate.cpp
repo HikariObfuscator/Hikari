@@ -220,6 +220,8 @@ struct FunctionCallObfuscate : public FunctionPass {
     if (toObfuscate(flag, &F, "fco") == false) {
       return false;
     }
+    errs() << "Running FunctionCallObfuscate On " << F.getName()
+           << "\n";
     Module *M = F.getParent();
     HandleObjC(*M);
     Type *Int32Ty = Type::getInt32Ty(M->getContext());

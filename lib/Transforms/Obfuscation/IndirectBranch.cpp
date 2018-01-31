@@ -58,6 +58,7 @@ struct IndirectBranch : public FunctionPass {
   }
   bool runOnFunction(Function &Func) override {
     if (toObfuscate(flag, &Func, "indibr")) {
+      errs() << "Running IndirectBranch On " << Func.getName() << "\n";
       return false;
     }
     vector<BranchInst *> BIs;

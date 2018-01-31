@@ -108,7 +108,6 @@ bool readFlag(Function *f, std::string attribute) {
     if (CallInst *CI = dyn_cast<CallInst>(Inst)) {
       if (CI->getCalledFunction() != nullptr &&
           CI->getCalledFunction()->getName().contains("hikari_" + attribute)) {
-        errs() << "Found Call:" << *CI << "\n";
         CI->eraseFromParent();
         return true;
       }

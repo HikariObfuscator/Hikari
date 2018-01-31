@@ -44,6 +44,7 @@ bool Flattening::runOnFunction(Function &F) {
   Function *tmp = &F;
   // Do we obfuscate
   if (toObfuscate(flag, tmp, "fla")) {
+    errs() << "Running ControlFlowFlattening On " << F.getName() << "\n";
     if (flatten(tmp)) {
       ++Flattened;
     }
