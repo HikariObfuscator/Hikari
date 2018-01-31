@@ -73,6 +73,7 @@ struct Obfuscation : public ModulePass {
   bool runOnModule(Module &M) override {
     // Initial ACD Pass
     if (EnableAllObfuscation || EnableAntiClassDump) {
+      errs()<<"Running AntiClassDump On "<<M.getSourceFileName()<<"\n";
       ModulePass *P = createAntiClassDumpPass();
       P->doInitialization(M);
       P->runOnModule(M);
@@ -80,23 +81,26 @@ struct Obfuscation : public ModulePass {
     }
     // Now do FCO
     if (EnableAllObfuscation || EnableFunctionCallObfuscate) {
+      errs()<<"Running FunctionCallObfuscate On "<<M.getSourceFileName()<<"\n";
+      FunctionPass *P = createFunctionCallObfuscatePass();
+      P->doInitialization(M);
       for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
         Function &F = *iter;
         if (!F.isDeclaration()) {
-          FunctionPass *P = createFunctionCallObfuscatePass();
-          P->doInitialization(M);
           P->runOnFunction(F);
-          delete P;
         }
       }
+      delete P;
     }
     if (EnableAllObfuscation || EnableAntiHooking) {
+      errs()<<"Running AntiHooking On "<<M.getSourceFileName()<<"\n";
       ModulePass *P = createAntiHookPass();
       P->doInitialization(M);
       P->runOnModule(M);
       delete P;
     }
     if (EnableAllObfuscation || EnableAntiDebugging) {
+      errs()<<"Running AntiDebugging On "<<M.getSourceFileName()<<"\n";
       ModulePass *P = createAntiDebuggingPass();
       P->doInitialization(M);
       P->runOnModule(M);
@@ -104,6 +108,7 @@ struct Obfuscation : public ModulePass {
     }
     if (EnableAllObfuscation || EnableStringEncryption) {
       // Now Encrypt Strings
+      errs()<<"Running StringEncryption On "<<M.getSourceFileName()<<"\n";
       ModulePass *P = createStringEncryptionPass();
       P->runOnModule(M);
       delete P;
@@ -123,21 +128,25 @@ struct Obfuscation : public ModulePass {
       if (!F.isDeclaration()) {
         FunctionPass *P = NULL;
         if (EnableAllObfuscation || EnableBasicBlockSplit) {
+          errs()<<"Running BasicBlockSplit On "<<M.getSourceFileName()<<"\n";
           P = createSplitBasicBlockPass();
           P->runOnFunction(F);
           delete P;
         }
         if (EnableAllObfuscation || EnableBogusControlFlow) {
+          errs()<<"Running BogusControlFlow On "<<M.getSourceFileName()<<"\n";
           P = createBogusControlFlowPass();
           P->runOnFunction(F);
           delete P;
         }
         if (EnableAllObfuscation || EnableFlattening) {
+          errs()<<"Running ControlFlowFlattening On "<<M.getSourceFileName()<<"\n";
           P = createFlatteningPass();
           P->runOnFunction(F);
           delete P;
         }
         if (EnableAllObfuscation || EnableSubstitution) {
+          errs()<<"Running Instruction Substitution On "<<M.getSourceFileName()<<"\n";
           P = createSubstitutionPass();
           P->runOnFunction(F);
           delete P;
@@ -147,6 +156,7 @@ struct Obfuscation : public ModulePass {
 
     // Post-Run Clean-up part
     if (EnableAllObfuscation || EnableIndirectBranching) {
+      errs()<<"Running IndirectBranch On "<<M.getSourceFileName()<<"\n";
       FunctionPass *P = createIndirectBranchPass();
       P->doInitialization(M);
       vector<Function *> funcs;
@@ -159,6 +169,7 @@ struct Obfuscation : public ModulePass {
       delete P;
     }
     if (EnableAllObfuscation || EnableFunctionWrapper) {
+      errs()<<"Running FunctionWrapper On "<<M.getSourceFileName()<<"\n";
       ModulePass *P = createFunctionWrapperPass();
       P->runOnModule(M);
       delete P;
