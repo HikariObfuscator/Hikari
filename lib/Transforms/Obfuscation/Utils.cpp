@@ -135,6 +135,8 @@ bool toObfuscate(bool flag, Function *f, std::string attribute) {
     return false;
   }
   if (readAnnotate(f).find(attr) != std::string::npos || readFlag(f, attr)) {
+    f->removeFnAttr(Attribute::AttrKind::OptimizeForSize);
+    f->addFnAttr(Attribute::AttrKind::OptimizeNone);
     return true;
   }
   if (flag == true) {

@@ -94,10 +94,13 @@ struct Obfuscation : public ModulePass {
     MP->doInitialization(M);
     MP->runOnModule(M);
     delete MP;
-    MP = createAntiDebuggingPass(EnableAllObfuscation || EnableAntiDebugging);
-    MP->doInitialization(M);
-    MP->runOnModule(M);
-    delete MP;
+    if(EnableAllObfuscation || EnableAntiDebugging){
+      // We don't want to link in the IR if the user doesn't want ADB
+      MP = createAntiDebuggingPass(EnableAllObfuscation || EnableAntiDebugging);
+      MP->doInitialization(M);
+      MP->runOnModule(M);
+      delete MP;
+    }
     // Now Encrypt Strings
     MP = createStringEncryptionPass(EnableAllObfuscation ||
                                     EnableStringEncryption);
