@@ -113,6 +113,7 @@
 #include "llvm/IR/NoFolder.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Transforms/Obfuscation/Utils.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include <memory>
 
 // Stats
@@ -154,6 +155,31 @@ static CmpInst::Predicate preds[] = {CmpInst::ICMP_EQ,  CmpInst::ICMP_NE,
                                      CmpInst::ICMP_UGT, CmpInst::ICMP_UGE,
                                      CmpInst::ICMP_ULT, CmpInst::ICMP_ULE};
 namespace {
+  static bool OnlyUsedBy(Value *V, Value *Usr) {
+    for (User *U : V->users())
+      if (U != Usr)
+        return false;
+
+    return true;
+  }
+  static void RemoveDeadConstant(Constant *C) {
+    assert(C->use_empty() && "Constant is not dead!");
+    SmallPtrSet<Constant*, 4> Operands;
+    for (Value *Op : C->operands())
+      if (OnlyUsedBy(Op, C))
+        Operands.insert(cast<Constant>(Op));
+    if (GlobalVariable *GV = dyn_cast<GlobalVariable>(C)) {
+      if (!GV->hasLocalLinkage()) return;   // Don't delete non-static globals.
+      GV->eraseFromParent();
+    }
+    else if (!isa<Function>(C))
+      if (isa<CompositeType>(C->getType()))
+        C->destroyConstant();
+
+    // If the constant referenced anything, see if we can delete it as well.
+    for (Constant *O : Operands)
+      RemoveDeadConstant(O);
+  }
 struct BogusControlFlow : public FunctionPass {
   static char ID; // Pass identification
   bool flag;
@@ -595,6 +621,45 @@ struct BogusControlFlow : public FunctionPass {
           }
         }
       }
+    }
+    // Remove DIs from AlterBB
+    vector<CallInst *> toRemove;
+    vector<Constant*> DeadConstants;
+    for (Instruction &I : *alteredBB) {
+      if (CallInst *CI = dyn_cast<CallInst>(&I)) {
+        if (CI->getCalledFunction() != nullptr &&
+            CI->getCalledFunction()->getName().startswith("llvm.dbg")) {
+          toRemove.push_back(CI);
+        }
+      }
+    }
+    // Shamefully stolen from IPO/StripSymbols.cpp
+    for (CallInst *CI : toRemove) {
+      Value *Arg1 = CI->getArgOperand(0);
+      Value *Arg2 = CI->getArgOperand(1);
+      assert(CI->use_empty() && "llvm.dbg intrinsic should have void result");
+      CI->eraseFromParent();
+      if (Arg1->use_empty()) {
+        if (Constant *C = dyn_cast<Constant>(Arg1)) {
+          DeadConstants.push_back(C);
+        } else {
+          RecursivelyDeleteTriviallyDeadInstructions(Arg1);
+        }
+      }
+      if (Arg2->use_empty()) {
+        if (Constant *C = dyn_cast<Constant>(Arg2)) {
+          DeadConstants.push_back(C);
+        }
+      }
+    }
+    while (!DeadConstants.empty()) {
+      Constant *C = DeadConstants.back();
+      DeadConstants.pop_back();
+      if (GlobalVariable *GV = dyn_cast<GlobalVariable>(C)) {
+        if (GV->hasLocalLinkage())
+          RemoveDeadConstant(GV);
+      } else
+        RemoveDeadConstant(C);
     }
     return alteredBB;
   } // end of createAlteredBasicBlock()
