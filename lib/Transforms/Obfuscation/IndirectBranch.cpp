@@ -32,11 +32,12 @@ namespace llvm {
 struct IndirectBranch : public FunctionPass {
   static char ID;
   bool flag;
+  bool initialized;
   map<BasicBlock *, unsigned long long> indexmap;
-  IndirectBranch() : FunctionPass(ID) { this->flag = true; }
-  IndirectBranch(bool flag) : FunctionPass(ID) { this->flag = flag; }
+  IndirectBranch() : FunctionPass(ID) { this->flag = true;this->initialized=false;}
+  IndirectBranch(bool flag) : FunctionPass(ID) { this->flag = flag;this->initialized=false;}
   StringRef getPassName() const override { return StringRef("IndirectBranch"); }
-  bool doInitialization(Module &M) override {
+  bool initialize(Module &M){
     vector<Constant *> BBs;
     unsigned long long i = 0;
     for (auto F = M.begin(); F != M.end(); F++) {
@@ -59,6 +60,10 @@ struct IndirectBranch : public FunctionPass {
   bool runOnFunction(Function &Func) override {
     if (!toObfuscate(flag, &Func, "indibr")) {
       return false;
+    }
+    if(this->initialized==false){
+      initialize(*Func.getParent());
+      this->initialized=true;
     }
     errs() << "Running IndirectBranch On " << Func.getName() << "\n";
     vector<BranchInst *> BIs;

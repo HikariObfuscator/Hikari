@@ -89,20 +89,22 @@ struct Obfuscation : public ModulePass {
       }
     }
     delete FP;
-    ModulePass *MP =
-        createAntiHookPass(EnableAllObfuscation || EnableAntiHooking);
-    MP->doInitialization(M);
-    MP->runOnModule(M);
-    delete MP;
+    if(EnableAllObfuscation || EnableAntiHooking){
+      ModulePass *MP =
+          createAntiHookPass(EnableAllObfuscation || EnableAntiHooking);
+      MP->doInitialization(M);
+      MP->runOnModule(M);
+      delete MP;
+    }
     if(EnableAllObfuscation || EnableAntiDebugging){
       // We don't want to link in the IR if the user doesn't want ADB
-      MP = createAntiDebuggingPass(EnableAllObfuscation || EnableAntiDebugging);
+      ModulePass *MP = createAntiDebuggingPass(EnableAllObfuscation || EnableAntiDebugging);
       MP->doInitialization(M);
       MP->runOnModule(M);
       delete MP;
     }
     // Now Encrypt Strings
-    MP = createStringEncryptionPass(EnableAllObfuscation ||
+    ModulePass *MP = createStringEncryptionPass(EnableAllObfuscation ||
                                     EnableStringEncryption);
     MP->runOnModule(M);
     delete MP;
@@ -140,7 +142,6 @@ struct Obfuscation : public ModulePass {
     errs() << "Doing Post-Run Cleanup\n";
     FunctionPass *P = createIndirectBranchPass(EnableAllObfuscation ||
                                                EnableIndirectBranching);
-    P->doInitialization(M);
     vector<Function *> funcs;
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
       funcs.push_back(&*iter);
