@@ -47,10 +47,11 @@ namespace llvm {
 struct AntiDebugging : public ModulePass {
   static char ID;
   bool flag;
-  AntiDebugging() : ModulePass(ID) { this->flag = true; }
-  AntiDebugging(bool flag) : ModulePass(ID) { this->flag = flag; }
+  bool initialized;
+  AntiDebugging() : ModulePass(ID) { this->flag = true;this->initialized=false;}
+  AntiDebugging(bool flag) : ModulePass(ID) { this->flag = flag;this->initialized=false;}
   StringRef getPassName() const override { return StringRef("AntiDebugging"); }
-  virtual bool doInitialization(Module &M) override {
+  bool Initialize(Module &M){
     if (PreCompiledIRPath == "") {
       SmallString<32> Path;
       if (sys::path::home_directory(Path)) { // Stolen from LineEditor.cpp
@@ -73,36 +74,36 @@ struct AntiDebugging : public ModulePass {
       // SMD.print("Hikari", errs());
       Linker::linkModules(M, std::move(ADBM), Linker::Flags::LinkOnlyNeeded);
       // FIXME: Mess with GV in ADBCallBack
+      Function *ADBCallBack = M.getFunction("ADBCallBack");
+      if (ADBCallBack) {
+        assert(!ADBCallBack->isDeclaration() &&
+               "AntiDebuggingCallback is not concrete!");
+        ADBCallBack->setVisibility(
+            GlobalValue::VisibilityTypes::HiddenVisibility);
+        ADBCallBack->setLinkage(GlobalValue::LinkageTypes::PrivateLinkage);
+        ADBCallBack->removeFnAttr(Attribute::AttrKind::NoInline);
+        ADBCallBack->removeFnAttr(Attribute::AttrKind::OptimizeNone);
+        ADBCallBack->addFnAttr(Attribute::AttrKind::AlwaysInline);
+      }
+      Function *ADBInit = M.getFunction("InitADB");
+      if (ADBInit) {
+        assert(!ADBInit->isDeclaration() &&
+               "AntiDebuggingInitializer is not concrete!");
+        ADBInit->setVisibility(GlobalValue::VisibilityTypes::HiddenVisibility);
+        ADBInit->setLinkage(GlobalValue::LinkageTypes::PrivateLinkage);
+        ADBInit->removeFnAttr(Attribute::AttrKind::NoInline);
+        ADBInit->removeFnAttr(Attribute::AttrKind::OptimizeNone);
+        ADBInit->addFnAttr(Attribute::AttrKind::AlwaysInline);
+      }
       return true;
     } else {
       errs() << "Failed To Link PreCompiled AntiDebugging IR From:"
              << PreCompiledIRPath << "\n";
       return false;
     }
+
   }
   bool runOnModule(Module &M) override {
-    errs() << "Running AntiDebugging On " << M.getSourceFileName() << "\n";
-    Function *ADBCallBack = M.getFunction("ADBCallBack");
-    if (ADBCallBack) {
-      assert(!ADBCallBack->isDeclaration() &&
-             "AntiDebuggingCallback is not concrete!");
-      ADBCallBack->setVisibility(
-          GlobalValue::VisibilityTypes::HiddenVisibility);
-      ADBCallBack->setLinkage(GlobalValue::LinkageTypes::PrivateLinkage);
-      ADBCallBack->removeFnAttr(Attribute::AttrKind::NoInline);
-      ADBCallBack->removeFnAttr(Attribute::AttrKind::OptimizeNone);
-      ADBCallBack->addFnAttr(Attribute::AttrKind::AlwaysInline);
-    }
-    Function *ADBInit = M.getFunction("InitADB");
-    if (ADBInit) {
-      assert(!ADBInit->isDeclaration() &&
-             "AntiDebuggingInitializer is not concrete!");
-      ADBInit->setVisibility(GlobalValue::VisibilityTypes::HiddenVisibility);
-      ADBInit->setLinkage(GlobalValue::LinkageTypes::PrivateLinkage);
-      ADBInit->removeFnAttr(Attribute::AttrKind::NoInline);
-      ADBInit->removeFnAttr(Attribute::AttrKind::OptimizeNone);
-      ADBInit->addFnAttr(Attribute::AttrKind::AlwaysInline);
-    }
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
       Function &F = *iter;
       if (toObfuscate(flag, &F, "adb") && F.getName() != "ADBCallBack" &&
@@ -113,6 +114,11 @@ struct AntiDebugging : public ModulePass {
     return true;
   }
   bool runOnFunction(Function &F) {
+    errs() << "Running AntiDebugging On " << F.getName() << "\n";
+    if(this->initialized==false){
+      Initialize(*F.getParent());
+      this->initialized=true;
+    }
     BasicBlock *EntryBlock = &(F.getEntryBlock());
     IRBuilder<> IRB(EntryBlock, EntryBlock->getFirstInsertionPt());
     // Now operate on Linked AntiDBGCallbacks

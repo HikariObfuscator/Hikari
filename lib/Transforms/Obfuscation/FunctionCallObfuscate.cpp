@@ -285,13 +285,6 @@ struct FunctionCallObfuscate : public FunctionPass {
                 ConstantInt::get(Int32Ty, RTLD_NOW | RTLD_GLOBAL));
             Value *Handle =
                 IRB.CreateCall(dlopen_decl, ArrayRef<Value *>(dlopenargs));
-            // errs() << "Created dlopen() Instruction:";
-            // Handle->print(errs());
-            // errs() << "\n";
-            // Hack. See issues #1
-            // errs() << "Fixed SymbolName:" << calledFunction->getName()<< "
-            // To:" << calledFunctionName << "\n";
-
             // Create dlsym call
             vector<Value *> args;
             args.push_back(Handle);
@@ -300,11 +293,6 @@ struct FunctionCallObfuscate : public FunctionPass {
             Value *bitCastedFunction =
                 IRB.CreateBitCast(fp, CS.getCalledValue()->getType());
             CS.setCalledFunction(bitCastedFunction);
-            // errs() << "Created dlsym() Instruction:";
-            // fp->print(errs());
-            //  errs() << " For Function:";
-            // calledFunction->print(errs());
-            // errs() << "\n";
           }
         }
       }

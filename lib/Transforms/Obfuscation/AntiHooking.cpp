@@ -50,10 +50,11 @@ namespace llvm {
 struct AntiHook : public ModulePass {
   static char ID;
   bool flag;
-  AntiHook() : ModulePass(ID) { this->flag = true; }
-  AntiHook(bool flag) : ModulePass(ID) { this->flag = flag; }
+  bool initialized;
+  AntiHook() : ModulePass(ID) { this->flag = true;this->initialized=false;}
+  AntiHook(bool flag) : ModulePass(ID) { this->flag = flag;this->initialized=false;}
   StringRef getPassName() const override { return StringRef("AntiHook"); }
-  virtual bool doInitialization(Module &M) override {
+  bool Initialize(Module &M){
     if (PreCompiledIRPath == "") {
       SmallString<32> Path;
       if (sys::path::home_directory(Path)) { // Stolen from LineEditor.cpp
@@ -81,7 +82,6 @@ struct AntiHook : public ModulePass {
     return true;
   }
   bool runOnModule(Module &M) override {
-    errs() << "Running AntiHooking On " << M.getSourceFileName() << "\n";
     Triple tri(M.getTargetTriple());
     vector<unsigned long long> signatures;
     if (tri.getArch() == Triple::ArchType::aarch64) {
@@ -90,7 +90,11 @@ struct AntiHook : public ModulePass {
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
       Function &F = *iter;
       if (toObfuscate(flag, &F, "antihook")) {
-
+        errs() << "Running AntiHooking On " << F.getName() << "\n";
+        if(this->initialized==false){
+          Initialize(M);
+          this->initialized=true;
+        }
         // Analyze CallInst And InvokeInst
         vector<Function *> calledFunctions;
         calledFunctions.push_back(&F);
