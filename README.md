@@ -3,3 +3,15 @@ Hikari(Light in Japanese) is my hackathon-ish ~~toy project for the 2017 Christm
 
 # 光
 Hikari(光) 是我~~在2017年圣诞节期间的玩具项目~~花费了50年的血和泪的开发产物,目前已经足够稳定可以在生产环境中使用。然而，正如一开始所计划的那样。在LLVM6.0正式Release之后, Hikari将被移植到Release版本并由于显而易见的原因终止支持(时间和精力成本,吸引来的弱智骚扰我的私人联系方式，等等)。你可以在``developer`` 分支上找到开发历史。后续的额外更新包含例如代码完整性校验以及完整的反Hook等功能，这一部分并不开源并且可能会在机会合适的情况下作为商业产品的一部分放出。 如果您私底下认识我，我们或许可以讨论授权模式和价格等问题
+
+## Hikari是什么
+
+- 字符串加密
+- 基于OLLVM魔改的控制流混淆
+- 以及其他各类实验性质的混淆和二进制保护
+
+## Hikari不是什么
+
+- 快速破解RSA的工具![RSA](https://github.com/HikariObfuscator/Mirai/blob/master/RSA.png?raw=true)
+- 防JDA Pro的工具![JDA](https://github.com/HikariObfuscator/Mirai/blob/master/JDA.jpeg?raw=true)
+- 单靠混淆就可以自动修复逻辑漏洞工具[Security](https://github.com/HikariObfuscator/Mirai/blob/master/SEC.png?raw=true)
