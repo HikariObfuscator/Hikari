@@ -14,4 +14,4 @@ Hikari(光) 是我~~在2017年圣诞节期间的玩具项目~~花费了50年的�
 
 - 快速破解RSA的工具![RSA](https://github.com/HikariObfuscator/Mirai/blob/master/RSA.png?raw=true)
 - 防JDA Pro的工具![JDA](https://github.com/HikariObfuscator/Mirai/blob/master/JDA.jpeg?raw=true)
-- 单靠混淆就可以自动修复逻辑漏洞工具[Security](https://github.com/HikariObfuscator/Mirai/blob/master/SEC.png?raw=true)
+- 单靠混淆就可以自动修复逻辑漏洞工具![Security](https://github.com/HikariObfuscator/Mirai/blob/master/SEC.png?raw=true)
