@@ -24,9 +24,5 @@ Hikari(光) 是我在2017年圣诞节期间的玩具项目,目前已经足够稳
 **这基于LLVM6.0 RC3而非正式发布版，您可能会遇到一些奇怪的问题**
 
 ```
-# 编译
-```
 git clone -b 6.0-rc3 https://github.com/HikariObfuscator/Hikari.git Hikari && mkdir Build && cd Build && cmake -G "Ninja" -DCMAKE_BUILD_TYPE=MinSizeRel -DLLVM_APPEND_VC_REV=on -DLLVM_CREATE_XCODE_TOOLCHAIN=on -DCMAKE_INSTALL_PREFIX=~/Library/Developer/ ../Hikari && ninja &&ninja install-xcode-toolchain && git clone https://github.com/HikariObfuscator/Resources.git ~/Hikari && rsync -ua /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/ ~/Library/Developer/Toolchains/Hikari.xctoolchain/ && rm ~/Library/Developer/Toolchains/Hikari.xctoolchain/ToolchainInfo.plist
-```
-
 ```
