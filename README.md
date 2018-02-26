@@ -19,6 +19,14 @@ Hikari(光) 是我在2017年圣诞节期间的玩具项目,目前已经足够稳
 - 单靠混淆就可以自动修复逻辑漏洞工具![Security](https://github.com/HikariObfuscator/Mirai/blob/master/SEC.png?raw=true)
 ---->
 
-# 快速安装Quick Installation
-目前傻瓜版被暂时移除等待大约一周后的LLVM6.0正式发布  
-Currently the one-stop clone and build branch has been removed to wait for LLVM6.0 release
+# macOS快速安装 macOS Quick Installation
+**This is based on top of LLVM6.0 RC3, which is not a final release version.Things might break!**
+**这基于LLVM6.0 RC3而非正式发布版，您可能会遇到一些奇怪的问题**
+
+```
+# 编译
+```
+git clone -b 6.0-rc3 https://github.com/HikariObfuscator/Hikari.git Hikari && mkdir Build && cd Build && cmake -G "Ninja" -DCMAKE_BUILD_TYPE=MinSizeRel -DLLVM_APPEND_VC_REV=on -DLLVM_CREATE_XCODE_TOOLCHAIN=on -DCMAKE_INSTALL_PREFIX=~/Library/Developer/ ../Hikari && ninja &&ninja install-xcode-toolchain && git clone https://github.com/HikariObfuscator/Resources.git ~/Hikari && rsync -ua /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/ ~/Library/Developer/Toolchains/Hikari.xctoolchain/ && rm ~/Library/Developer/Toolchains/Hikari.xctoolchain/ToolchainInfo.plist
+```
+
+```
