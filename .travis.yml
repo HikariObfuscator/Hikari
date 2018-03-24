@@ -1,5 +1,4 @@
 language: c++
-sudo: true
 branches:
   except:
     - master
@@ -7,9 +6,5 @@ os:
   - osx
   - linux
 compiler: clang
-install:
-- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install cmake ninja ; fi
-- if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get install cmake ninja ; fi
-
 script:
-- mkdir Build && cd Build && cmake -G "Ninja" -DCMAKE_BUILD_TYPE=MinSizeRel -DLLVM_APPEND_VC_REV=on ../ && ninja
+- mkdir Build && cd Build && cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=MinSizeRel -DLLVM_APPEND_VC_REV=on ../ && make -j8
