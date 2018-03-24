@@ -38,7 +38,7 @@
 #include "llvm/Transforms/Scalar/GVN.h"
 #include "llvm/Transforms/Scalar/SimpleLoopUnswitch.h"
 #include "llvm/Transforms/Vectorize.h"
-
+#include "llvm/Transforms/Obfuscation/Obfuscation.h"
 using namespace llvm;
 
 static cl::opt<bool>
@@ -390,6 +390,7 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
 
 void PassManagerBuilder::populateModulePassManager(
     legacy::PassManagerBase &MPM) {
+    MPM.add(createObfuscationPass());
   if (!PGOSampleUse.empty()) {
     MPM.add(createPruneEHPass());
     MPM.add(createSampleProfileLoaderPass(PGOSampleUse));
