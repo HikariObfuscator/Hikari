@@ -34,10 +34,16 @@ struct IndirectBranch : public FunctionPass {
   bool flag;
   bool initialized;
   map<BasicBlock *, unsigned long long> indexmap;
-  IndirectBranch() : FunctionPass(ID) { this->flag = true;this->initialized=false;}
-  IndirectBranch(bool flag) : FunctionPass(ID) { this->flag = flag;this->initialized=false;}
+  IndirectBranch() : FunctionPass(ID) {
+    this->flag = true;
+    this->initialized = false;
+  }
+  IndirectBranch(bool flag) : FunctionPass(ID) {
+    this->flag = flag;
+    this->initialized = false;
+  }
   StringRef getPassName() const override { return StringRef("IndirectBranch"); }
-  bool initialize(Module &M){
+  bool initialize(Module &M) {
     vector<Constant *> BBs;
     unsigned long long i = 0;
     for (auto F = M.begin(); F != M.end(); F++) {
@@ -53,17 +59,19 @@ struct IndirectBranch : public FunctionPass {
         ArrayType::get(Type::getInt8PtrTy(M.getContext()), BBs.size());
     Constant *BlockAddressArray =
         ConstantArray::get(AT, ArrayRef<Constant *>(BBs));
-    new GlobalVariable(M, AT, false, GlobalValue::LinkageTypes::PrivateLinkage,
-                       BlockAddressArray, "IndirectBranchingGlobalTable");
+    GlobalVariable *Table = new GlobalVariable(
+        M, AT, false, GlobalValue::LinkageTypes::InternalLinkage,
+        BlockAddressArray, "IndirectBranchingGlobalTable");
+    appendToCompilerUsed(M, {Table});
     return true;
   }
   bool runOnFunction(Function &Func) override {
     if (!toObfuscate(flag, &Func, "indibr")) {
       return false;
     }
-    if(this->initialized==false){
+    if (this->initialized == false) {
       initialize(*Func.getParent());
-      this->initialized=true;
+      this->initialized = true;
     }
     errs() << "Running IndirectBranch On " << Func.getName() << "\n";
     vector<BranchInst *> BIs;
@@ -98,9 +106,11 @@ struct IndirectBranch : public FunctionPass {
         // Create a new GV
         Constant *BlockAddressArray =
             ConstantArray::get(AT, ArrayRef<Constant *>(BlockAddresses));
-        LoadFrom = new GlobalVariable(*Func.getParent(), AT, false,
-                                      GlobalValue::LinkageTypes::PrivateLinkage,
-                                      BlockAddressArray);
+        LoadFrom = new GlobalVariable(
+            *Func.getParent(), AT, false,
+            GlobalValue::LinkageTypes::PrivateLinkage, BlockAddressArray,
+            "HikariConditionalLocalIndirectBranchingTable");
+        appendToCompilerUsed(*Func.getParent(), {LoadFrom});
       } else {
         LoadFrom = Func.getParent()->getGlobalVariable(
             "IndirectBranchingGlobalTable", true);
@@ -124,6 +134,11 @@ struct IndirectBranch : public FunctionPass {
       ReplaceInstWithInst(BI, indirBr);
     }
     return true;
+  }
+  virtual bool doFinalization(Module &M) override {
+    indexmap.clear();
+    initialized = false;
+    return false;
   }
 };
 } // namespace llvm

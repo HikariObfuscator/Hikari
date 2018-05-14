@@ -28,7 +28,6 @@
   This pass only provides thin mode
 */
 
-#include "llvm/Transforms/Obfuscation/AntiClassDump.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -38,8 +37,9 @@
 #include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Obfuscation/Obfuscation.h"
+#include "llvm/Transforms/Utils/ModuleUtils.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>
@@ -384,42 +384,20 @@ struct AntiClassDump : public ModulePass {
           ArrayRef<Constant *>(newStructValue)); // l_OBJC_$_CLASS_METHODS_
       GlobalVariable *newMethodStructGV = new GlobalVariable(
           *M, newType, true, GlobalValue::LinkageTypes::PrivateLinkage,
-          newMethodStruct);
+          newMethodStruct, "ACDNewInstanceMethodMap");
+      appendToCompilerUsed(*M, {newMethodStructGV});
       newMethodStructGV->copyAttributesFrom(methodListGV);
       Constant *bitcastExpr = ConstantExpr::getBitCast(
           newMethodStructGV,
           M->getTypeByName("struct.__method_list_t")->getPointerTo());
       metaclassCS->handleOperandChange(metaclassCS->getAggregateElement(5),
                                        bitcastExpr);
-      GlobalVariable *metadatacompilerusedGV = cast<GlobalVariable>(
-          M->getGlobalVariable("llvm.compiler.used", true));
-      ConstantArray *metadatacompilerusedlist =
-          cast<ConstantArray>(metadatacompilerusedGV->getInitializer());
-      ArrayType *oldmetadatatype = metadatacompilerusedlist->getType();
-      vector<Constant *> values;
-      for (unsigned i = 0; i < metadatacompilerusedlist->getNumOperands();
-           i++) {
-        Constant *foo =
-            metadatacompilerusedlist->getOperand(i)->stripPointerCasts();
-        if (foo != methodListGV) {
-          values.push_back(metadatacompilerusedlist->getOperand(i));
-        }
-      }
-      // values.push_back(ConstantExpr::getBitCast(newMethodStructGV,Type::getInt8PtrTy(M->getContext())));
-      ArrayType *newmetadatatype =
-          ArrayType::get(oldmetadatatype->getElementType(), values.size());
-      Constant *newused =
-          ConstantArray::get(newmetadatatype, ArrayRef<Constant *>(values));
-      metadatacompilerusedGV->dropAllReferences();
-      metadatacompilerusedGV->removeFromParent();
+      methodListGV->replaceAllUsesWith(ConstantExpr::getBitCast(
+          newMethodStructGV,
+          methodListGV->getType())); // llvm.compiler.used doesn't allow
+                                     // Null/Undef Value
       methodListGV->dropAllReferences();
       methodListGV->eraseFromParent();
-      GlobalVariable *newIntializer =
-          new GlobalVariable(*M, newmetadatatype, true,
-                             GlobalValue::LinkageTypes::AppendingLinkage,
-                             newused, "llvm.compiler.used");
-      newIntializer->copyAttributesFrom(metadatacompilerusedGV);
-      metadatacompilerusedGV->deleteValue();
       errs() << "Updated Instance Method Map of:" << class_ro->getName()
              << "\n";
     }
@@ -491,7 +469,8 @@ struct AntiClassDump : public ModulePass {
         ArrayRef<Constant *>(newStructValue)); // l_OBJC_$_CLASS_METHODS_
     GlobalVariable *newMethodStructGV = new GlobalVariable(
         *M, newType, true, GlobalValue::LinkageTypes::PrivateLinkage,
-        newMethodStruct);
+        newMethodStruct, "ACDNewInstanceMethodMap");
+    appendToCompilerUsed(*M, {newMethodStructGV});
     if (methodListGV) {
       newMethodStructGV->copyAttributesFrom(methodListGV);
     }
@@ -499,34 +478,14 @@ struct AntiClassDump : public ModulePass {
         newMethodStructGV,
         M->getTypeByName("struct.__method_list_t")->getPointerTo());
     classCS->handleOperandChange(classCS->getAggregateElement(5), bitcastExpr);
-    GlobalVariable *metadatacompilerusedGV =
-        cast<GlobalVariable>(M->getGlobalVariable("llvm.compiler.used", true));
-    ConstantArray *metadatacompilerusedlist =
-        cast<ConstantArray>(metadatacompilerusedGV->getInitializer());
-    ArrayType *oldmetadatatype = metadatacompilerusedlist->getType();
-    vector<Constant *> values;
-    for (unsigned i = 0; i < metadatacompilerusedlist->getNumOperands(); i++) {
-      Constant *foo =
-          metadatacompilerusedlist->getOperand(i)->stripPointerCasts();
-      if (foo != methodListGV) {
-        values.push_back(metadatacompilerusedlist->getOperand(i));
-      }
-    }
-    ArrayType *newmetadatatype =
-        ArrayType::get(oldmetadatatype->getElementType(), values.size());
-    Constant *newused =
-        ConstantArray::get(newmetadatatype, ArrayRef<Constant *>(values));
-    metadatacompilerusedGV->dropAllReferences();
-    metadatacompilerusedGV->removeFromParent();
     if (methodListGV) {
+      methodListGV->replaceAllUsesWith(ConstantExpr::getBitCast(
+          newMethodStructGV,
+          methodListGV->getType())); // llvm.compiler.used doesn't allow
+                                     // Null/Undef Value
       methodListGV->dropAllReferences();
       methodListGV->eraseFromParent();
     }
-    GlobalVariable *newIntializer = new GlobalVariable(
-        *M, newmetadatatype, true, GlobalValue::LinkageTypes::AppendingLinkage,
-        newused, "llvm.compiler.used");
-    newIntializer->copyAttributesFrom(metadatacompilerusedGV);
-    metadatacompilerusedGV->deleteValue();
     errs() << "Updated Class Method Map of:" << class_ro->getName() << "\n";
     // End ClassCS Handling
   } // handleClass
@@ -557,6 +516,9 @@ struct AntiClassDump : public ModulePass {
             cast<ConstantStruct>(methodListGV->getInitializer());
         // Extracting %struct._objc_method array from %struct.__method_list_t =
         // type { i32, i32, [0 x %struct._objc_method] }
+        if (methodListStruct->getOperand(2)->isZeroValue()) {
+          return;
+        }
         ConstantArray *methodList =
             cast<ConstantArray>(methodListStruct->getOperand(2));
         for (unsigned i = 0; i < methodList->getNumOperands(); i++) {

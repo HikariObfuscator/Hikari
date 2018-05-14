@@ -1,9 +1,8 @@
 #include "llvm/Transforms/Obfuscation/Utils.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
-#include <sstream>
-
 // Shamefully borrowed from ../Scalar/RegToMem.cpp :(
 bool valueEscapes(Instruction *Inst) {
   BasicBlock *BB = Inst->getParent();
@@ -15,6 +14,91 @@ bool valueEscapes(Instruction *Inst) {
     }
   }
   return false;
+}
+void appendToAnnotations(Module &M, ConstantStruct *Data) {
+  // Type for the annotation array
+  // { i8*, i8*, i8*, i32 }
+  GlobalVariable *AnnotationGV = M.getGlobalVariable("llvm.global.annotations");
+  Type *Int8PtrTy = Type::getInt8PtrTy(M.getContext());
+  Type *Int32Ty = Type::getInt32Ty(M.getContext());
+  if (AnnotationGV == nullptr) {
+    ArrayType *AT = ArrayType::get(Data->getType(), 1);
+    ConstantArray *CA = cast<ConstantArray>(ConstantArray::get(AT, {Data}));
+    GlobalVariable *newGV = new GlobalVariable(M, CA->getType(), false,
+                                               GlobalValue::AppendingLinkage,
+                                               CA, "llvm.global.annotations");
+    newGV->setSection("llvm.metadata");
+    return;
+  } else {
+    StructType *ST = StructType::get(
+        M.getContext(), {Int8PtrTy, Int8PtrTy, Int8PtrTy, Int32Ty});
+    vector<Constant *> exists;
+    for (unsigned i = 0;
+         i < cast<ArrayType>(AnnotationGV->getInitializer()->getType())
+                 ->getNumElements();
+         i++) {
+      exists.push_back(AnnotationGV->getInitializer()->getAggregateElement(i));
+    }
+    exists.push_back(Data);
+    ArrayType *AT = ArrayType::get(ST, exists.size());
+    ConstantArray *CA = cast<ConstantArray>(
+        ConstantArray::get(AT, ArrayRef<Constant *>(exists)));
+    GlobalVariable *newGV = new GlobalVariable(M, CA->getType(), false,
+                                               GlobalValue::AppendingLinkage,
+                                               CA, "llvm.global.annotations");
+    newGV->setSection("llvm.metadata");
+    return;
+  }
+}
+void FixFunctionConstantExpr(Function *Func) {
+  // Replace ConstantExpr with equal instructions
+  // Otherwise replacing on Constant will crash the compiler
+  for (BasicBlock &BB : *Func) {
+    FixBasicBlockConstantExpr(&BB);
+  }
+}
+void FixBasicBlockConstantExpr(BasicBlock *BB) {
+  std::set<GlobalVariable *> Globals;
+  std::set<User *> Users;
+  Instruction *InsertPt =
+      &*(BB->getParent()->getEntryBlock().getFirstInsertionPt());
+  IRBuilder<> IRB(InsertPt);
+  // Replace ConstantExpr with equal instructions
+  // Otherwise replacing on Constant will crash the compiler
+  for (Instruction &I : *BB) {
+    for (Value *Op : I.operands()) {
+      if (ConstantExpr *C = dyn_cast<ConstantExpr>(Op)) {
+        Instruction *Inst = IRB.Insert(C->getAsInstruction());
+        I.replaceUsesOfWith(C, Inst);
+      }
+    }
+  }
+}
+
+map<GlobalValue *, StringRef> BuildAnnotateMap(Module &M) {
+  map<GlobalValue *, StringRef> VAMap;
+  GlobalVariable *glob = M.getGlobalVariable("llvm.global.annotations");
+  if (glob != nullptr && glob->hasInitializer()) {
+    ConstantArray *CDA = cast<ConstantArray>(glob->getInitializer());
+    for (Value *op : CDA->operands()) {
+      ConstantStruct *anStruct = cast<ConstantStruct>(op);
+      /*
+        Structure: [Value,Annotation,SourceFilePath,LineNumber]
+        Usually wrapped inside GEP/BitCast
+        We only care about Value and Annotation Here
+      */
+      GlobalValue *Value =
+          cast<GlobalValue>(anStruct->getOperand(0)->getOperand(0));
+      GlobalVariable *Annotation =
+          cast<GlobalVariable>(anStruct->getOperand(1)->getOperand(0));
+      if (Annotation->hasInitializer()) {
+        VAMap[Value] =
+            cast<ConstantDataSequential>(Annotation->getInitializer())
+                ->getAsCString();
+      }
+    }
+  }
+  return VAMap;
 }
 
 void fixStack(Function *f) {

@@ -27,7 +27,6 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Obfuscation/Obfuscation.h"
@@ -220,9 +219,9 @@ struct FunctionCallObfuscate : public FunctionPass {
     if (toObfuscate(flag, &F, "fco") == false) {
       return false;
     }
-    errs() << "Running FunctionCallObfuscate On " << F.getName()
-           << "\n";
+    errs() << "Running FunctionCallObfuscate On " << F.getName() << "\n";
     Module *M = F.getParent();
+    FixFunctionConstantExpr(&F);
     HandleObjC(*M);
     Type *Int32Ty = Type::getInt32Ty(M->getContext());
     Type *Int8PtrTy = Type::getInt8PtrTy(M->getContext());
@@ -257,9 +256,10 @@ struct FunctionCallObfuscate : public FunctionPass {
           // Simple Extracting Failed
           // Use our own implementation
           if (calledFunction == NULL) {
-            errs() << "Failed To Extract Function From Indirect Call\n";
-            CS.getCalledValue()->print(errs());
-            errs() << "\n";
+            DEBUG_WITH_TYPE(
+                "opt", errs()
+                           << "Failed To Extract Function From Indirect Call: "
+                           << *CS.getCalledValue() << "\n");
             continue;
           }
           // It's only safe to restrict our modification to external symbols

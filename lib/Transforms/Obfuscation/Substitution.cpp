@@ -30,6 +30,11 @@ static cl::opt<int>
     ObfTimes("sub_loop",
              cl::desc("Choose how many time the -sub pass loops on a function"),
              cl::value_desc("number of times"), cl::init(1), cl::Optional);
+static cl::opt<unsigned int>
+    ObfProbRate("sub_prob",
+                cl::desc("Choose the probability [%] each basic blocks will be "
+                         "obfuscated by the InstructioSubstitution pass"),
+                cl::value_desc("probability rate"), cl::init(50), cl::Optional);
 
 // Stats
 STATISTIC(Add, "Add substitued");
@@ -110,6 +115,11 @@ bool Substitution::runOnFunction(Function &F) {
     errs() << "Substitution application number -sub_loop=x must be x > 0";
     return false;
   }
+  if (ObfProbRate > 100) {
+    errs() << "InstructionSubstitution application instruction percentage "
+              "-sub_prob=x must be 0 < x <= 100";
+    return false;
+  }
 
   Function *tmp = &F;
   // Do we obfuscate
@@ -130,7 +140,7 @@ bool Substitution::substitute(Function *f) {
   do {
     for (Function::iterator bb = tmp->begin(); bb != tmp->end(); ++bb) {
       for (BasicBlock::iterator inst = bb->begin(); inst != bb->end(); ++inst) {
-        if (inst->isBinaryOp()) {
+        if (inst->isBinaryOp() && cryptoutils->get_range(100) <= ObfProbRate) {
           switch (inst->getOpcode()) {
           case BinaryOperator::Add:
             // case BinaryOperator::FAdd:

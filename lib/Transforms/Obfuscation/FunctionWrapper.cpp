@@ -15,7 +15,6 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "llvm/Transforms/Obfuscation/FunctionWrapper.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -24,10 +23,6 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Path.h"
-#include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Obfuscation/Obfuscation.h"
 #include <cstdlib>
 #include <fstream>
@@ -39,12 +34,12 @@ static cl::opt<int>
     ProbRate("fw_prob",
              cl::desc("Choose the probability [%] For Each CallSite To Be "
                       "Obfuscated By FunctionWrapper"),
-             cl::value_desc("Probability Rate"), cl::init(70), cl::Optional);
+             cl::value_desc("Probability Rate"), cl::init(30), cl::Optional);
 static cl::opt<int> ObfTimes(
     "fw_times",
     cl::desc(
         "Choose how many time the FunctionWrapper pass loop on a CallSite"),
-    cl::value_desc("Number of Times"), cl::init(3), cl::Optional);
+    cl::value_desc("Number of Times"), cl::init(2), cl::Optional);
 namespace llvm {
 struct FunctionWrapper : public ModulePass {
   static char ID;
@@ -93,9 +88,9 @@ struct FunctionWrapper : public ModulePass {
         CS->getIntrinsicID() != Intrinsic::ID::not_intrinsic) {
       return nullptr;
     }
-    if(Function *tmp=dyn_cast<Function>(calledFunction)){
-      if(tmp->getName().startswith("clang.")){
-        //Clang Intrinsic
+    if (Function *tmp = dyn_cast<Function>(calledFunction)) {
+      if (tmp->getName().startswith("clang.")) {
+        // Clang Intrinsic
         return nullptr;
       }
     }
@@ -107,8 +102,9 @@ struct FunctionWrapper : public ModulePass {
     FunctionType *ft =
         FunctionType::get(CS->getType(), ArrayRef<Type *>(types), false);
     Function *func =
-        Function::Create(ft, GlobalValue::LinkageTypes::PrivateLinkage, "",
-                         CS->getParent()->getModule());
+        Function::Create(ft, GlobalValue::LinkageTypes::InternalLinkage,
+                         "HikariFunctionWrapper", CS->getParent()->getModule());
+    appendToCompilerUsed(*func->getParent(), {func});
     // FIXME: Correctly Steal Function Attributes
     func->addFnAttr(Attribute::AttrKind::OptimizeNone);
     func->addFnAttr(Attribute::AttrKind::NoInline);
