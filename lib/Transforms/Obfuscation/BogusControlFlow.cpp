@@ -728,8 +728,8 @@ struct BogusControlFlow : public FunctionPass {
       BasicBlock *EntryBlock =
           BasicBlock::Create(M.getContext(), "", emuFunction);
 
-      // BasicBlock* RealEntryBlock=&((*i)->getFunction()->getEntryBlock());
-      IRBuilder<> IRBReal(*i);
+      Instruction *tmp = &*((*i)->getParent()->getFirstInsertionPt());
+      IRBuilder<> IRBReal(tmp);
       IRBuilder<> IRBEmu(EntryBlock);
       // First,Construct a real RHS that will be used in the actual condition
       Constant *RealRHS = ConstantInt::get(I32Ty, cryptoutils->get_uint32_t());
