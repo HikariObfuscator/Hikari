@@ -106,22 +106,23 @@ struct FunctionWrapper : public ModulePass {
                          "HikariFunctionWrapper", CS->getParent()->getModule());
     appendToCompilerUsed(*func->getParent(), {func});
     // FIXME: Correctly Steal Function Attributes
-    func->addFnAttr(Attribute::AttrKind::OptimizeNone);
-    func->addFnAttr(Attribute::AttrKind::NoInline);
+    //func->addFnAttr(Attribute::AttrKind::OptimizeNone);
+    //func->addFnAttr(Attribute::AttrKind::NoInline);
+    func->copyAttributesFrom(cast<Function>(calledFunction));
     BasicBlock *BB = BasicBlock::Create(func->getContext(), "", func);
     IRBuilder<> IRB(BB);
     vector<Value *> params;
     for (auto arg = func->arg_begin(); arg != func->arg_end(); arg++) {
       params.push_back(arg);
     }
-    Value *retval = IRB.CreateCall(calledFunction, ArrayRef<Value *>(params));
+    Value *retval = IRB.CreateCall(ConstantExpr::getBitCast(cast<Function>(calledFunction),CS->getCalledValue()->getType()), ArrayRef<Value *>(params));
     if (ft->getReturnType()->isVoidTy()) {
       IRB.CreateRetVoid();
     } else {
       IRB.CreateRet(retval);
     }
     CS->setCalledFunction(func);
-    CS->mutateFunctionType(func->getFunctionType());
+    CS->mutateFunctionType(ft);
     Instruction *Inst = CS->getInstruction();
     delete CS;
     return new CallSite(Inst);
