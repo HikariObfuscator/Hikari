@@ -32,6 +32,7 @@
 #include <cstring>
 #include <fstream>
 #include <string>
+#include <random>
 
 // Stats
 #define DEBUG_TYPE "CryptoUtils"
@@ -612,36 +613,22 @@ void CryptoUtils::populate_pool() {
 
 bool CryptoUtils::prng_seed() {
 
-#if defined(__linux__)
-  std::ifstream devrandom("/dev/urandom");
-#else
-  std::ifstream devrandom("/dev/random");
-#endif
-
-  if (devrandom) {
-
-    devrandom.read(key, 16);
-
-    if (devrandom.gcount() != 16) {
-      errs() << "Cannot read enough bytes in /dev/random\n";
-      return false;
-    }
-
-    devrandom.close();
-    DEBUG_WITH_TYPE("cryptoutils",
-                    dbgs() << "cryptoutils seeded with /dev/random\n");
-
-    memset(ctr, 0, 16);
-
-    // Once the seed is there, we compute the
-    // AES128 key-schedule
-    aes_compute_ks(ks, key);
-
-    seeded = true;
-  } else {
-    errs() << "Cannot open /dev/random\n";
-    return false;
+  std::random_device rd;
+  size_t div = sizeof(key) / sizeof(unsigned int);
+  for (size_t i = 0; i < div; i++) {
+	  *(((unsigned int*) key) + i) = rd();
   }
+
+  DEBUG_WITH_TYPE("cryptoutils",
+			dbgs() << "cryptoutils seeded with std::random_device\n");
+
+  memset(ctr, 0, 16);
+
+  // Once the seed is there, we compute the
+  // AES128 key-schedule
+  aes_compute_ks(ks, key);
+
+  seeded = true;
   return true;
 }
 
