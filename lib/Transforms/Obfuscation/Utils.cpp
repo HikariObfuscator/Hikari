@@ -3,6 +3,8 @@
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/NoFolder.h"
 // Shamefully borrowed from ../Scalar/RegToMem.cpp :(
 bool valueEscapes(Instruction *Inst) {
   BasicBlock *BB = Inst->getParent();
@@ -62,21 +64,24 @@ void FixBasicBlockConstantExpr(BasicBlock *BB) {
   // Otherwise replacing on Constant will crash the compiler
   // Things to note:
   // - Phis must be placed at BB start so CEs must be placed prior to current BB
-  bool hasPhi=isa<PHINode>(BB->front());
-  bool isEntryBlock=(BB==&(BB->getParent()->getEntryBlock()));
-  if(hasPhi&&isEntryBlock){
-    return;
-  }
+  assert(!BB->empty()&&"BasicBlock is empty!");
+  assert((BB->getParent()!=NULL)&&"BasicBlock must be in a Function!");
+  Instruction* FunctionInsertPt=&*(BB->getParent()->getEntryBlock().getFirstInsertionPt());
+  //Instruction* LocalBBInsertPt=&*(BB.getFirstInsertionPt());
+
   for (Instruction &I : *BB) {
-    for (Value *Op : I.operands()) {
-      if (ConstantExpr *C = dyn_cast<ConstantExpr>(Op)) {
+    if(isa<LandingPadInst>(I)||isa<FuncletPadInst>(I)){
+      continue;
+    }
+    for(unsigned i=0;i<I.getNumOperands();i++){
+      if(ConstantExpr* C=dyn_cast<ConstantExpr>(I.getOperand(i))){
         Instruction* InsertPt=&I;
-        if(!isEntryBlock&&hasPhi){
-          InsertPt=&*(BB->getParent()->getEntryBlock().getFirstInsertionPt());
+        IRBuilder<NoFolder> IRB(InsertPt);
+        if(isa<PHINode>(I)){
+          IRB.SetInsertPoint(FunctionInsertPt);
         }
-        IRBuilder<> IRB(InsertPt);
         Instruction *Inst = IRB.Insert(C->getAsInstruction());
-        I.replaceUsesOfWith(C, Inst);
+        I.setOperand(i,Inst);
       }
     }
   }
