@@ -58,22 +58,30 @@ void FixFunctionConstantExpr(Function *Func) {
   }
 }
 void FixBasicBlockConstantExpr(BasicBlock *BB) {
-  std::set<GlobalVariable *> Globals;
-  std::set<User *> Users;
-  Instruction *InsertPt =
-      &*(BB->getParent()->getEntryBlock().getFirstInsertionPt());
-  IRBuilder<> IRB(InsertPt);
   // Replace ConstantExpr with equal instructions
   // Otherwise replacing on Constant will crash the compiler
+  // Things to note:
+  // - Phis must be placed at BB start so CEs must be placed prior to current BB
+  bool hasPhi=isa<PHINode>(BB->front());
+  bool isEntryBlock=(BB==&(BB->getParent()->getEntryBlock()));
+  if(hasPhi&&isEntryBlock){
+    return;
+  }
   for (Instruction &I : *BB) {
     for (Value *Op : I.operands()) {
       if (ConstantExpr *C = dyn_cast<ConstantExpr>(Op)) {
+        Instruction* InsertPt=&I;
+        if(!isEntryBlock&&hasPhi){
+          InsertPt=&*(BB->getParent()->getEntryBlock().getFirstInsertionPt());
+        }
+        IRBuilder<> IRB(InsertPt);
         Instruction *Inst = IRB.Insert(C->getAsInstruction());
         I.replaceUsesOfWith(C, Inst);
       }
     }
   }
 }
+
 
 map<GlobalValue *, StringRef> BuildAnnotateMap(Module &M) {
   map<GlobalValue *, StringRef> VAMap;
