@@ -66,23 +66,6 @@ struct StringEncryption : public ModulePass {
     }
     return true;
   } // End runOnModule
-  void FixFunctionConstantExpr(Function *Func) {
-    IRBuilder<> IRB(Func->getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
-    set<GlobalVariable *> Globals;
-    set<User *> Users;
-    // Replace ConstantExpr with equal instructions
-    // Otherwise replacing on Constant will crash the compiler
-    for (BasicBlock &BB : *Func) {
-      for (Instruction &I : BB) {
-        for (Value *Op : I.operands()) {
-          if (ConstantExpr *C = dyn_cast<ConstantExpr>(Op)) {
-            Instruction *Inst = IRB.Insert(C->getAsInstruction());
-            I.replaceUsesOfWith(C, Inst);
-          }
-        }
-      }
-    }
-  } // End FixFunctionConstantExpr
   void HandleFunction(Function *Func) {
     /*
       - Split Original EntryPoint BB into A and C.
@@ -93,7 +76,7 @@ struct StringEncryption : public ModulePass {
               |
               C
     */
-    FixFunctionConstantExpr(Func);
+    //FixFunctionConstantExpr(Func);
     BasicBlock *A = &(Func->getEntryBlock());
     BasicBlock *C = A->splitBasicBlock(A->getFirstNonPHIOrDbgOrLifetime());
     C->setName("PrecedingBlock");
@@ -108,6 +91,7 @@ struct StringEncryption : public ModulePass {
     for (BasicBlock &BB : *Func) {
       for (Instruction &I : BB) {
         for (Value *Op : I.operands()) {
+            Op=Op->stripPointerCasts();
           if (GlobalVariable *G = dyn_cast<GlobalVariable>(Op)) {
             Users.insert(&I);
             Globals.insert(G);
@@ -135,6 +119,15 @@ struct StringEncryption : public ModulePass {
 
         } else if (isa<ConstantDataSequential>(GV->getInitializer())) {
           rawStrings.insert(GV);
+        }else if(isa<ConstantArray>(GV->getInitializer())){
+           ConstantArray* CA=cast<ConstantArray>(GV->getInitializer());
+           for(unsigned i=0;i<CA->getNumOperands();i++){
+             Value* op=CA->getOperand(i)->stripPointerCasts();
+             if(GlobalVariable* GV=dyn_cast<GlobalVariable>(op)){
+               Globals.insert(GV);
+             }
+           }
+
         }
       }
     }
