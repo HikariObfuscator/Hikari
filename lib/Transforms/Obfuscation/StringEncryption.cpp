@@ -91,8 +91,10 @@ struct StringEncryption : public ModulePass {
     for (BasicBlock &BB : *Func) {
       for (Instruction &I : BB) {
         for (Value *Op : I.operands()) {
-            Op=Op->stripPointerCasts();
-          if (GlobalVariable *G = dyn_cast<GlobalVariable>(Op)) {
+          if (GlobalVariable *G = dyn_cast<GlobalVariable>(Op->stripPointerCasts())) {
+            if(User* U=dyn_cast<User>(Op)){
+              Users.insert(U);
+            }
             Users.insert(&I);
             Globals.insert(G);
           }
