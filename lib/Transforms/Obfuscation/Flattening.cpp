@@ -79,7 +79,6 @@ bool Flattening::flatten(Function *f) {
     if (tmp->isEHPad() || tmp->isLandingPad()) {
           errs()<<f->getName()<<" Contains Exception Handing Instructions and is unsupported for flattening in the open-source version of Hikari.\n";
           return false;
-          basicBlocks.push_back(BB);
     }
     origBB.push_back(tmp);
 
