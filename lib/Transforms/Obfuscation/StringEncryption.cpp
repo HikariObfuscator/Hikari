@@ -76,7 +76,7 @@ struct StringEncryption : public ModulePass {
               |
               C
     */
-    //FixFunctionConstantExpr(Func);
+    FixFunctionConstantExpr(Func);
     BasicBlock *A = &(Func->getEntryBlock());
     BasicBlock *C = A->splitBasicBlock(A->getFirstNonPHIOrDbgOrLifetime());
     C->setName("PrecedingBlock");
