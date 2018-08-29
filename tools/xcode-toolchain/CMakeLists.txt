@@ -91,8 +91,14 @@ add_custom_command(OUTPUT ${LLVMToolchainDir}/Info.plist
                   COMMAND ${CMAKE_COMMAND} -E remove ${LLVMToolchainDir}/Info.plist
                   COMMAND /usr/libexec/PlistBuddy -c "Add:CFBundleIdentifier string com.naville.hikari" "${LLVMToolchainDir}/Info.plist"
                   COMMAND /usr/libexec/PlistBuddy -c "Add:CompatibilityVersion integer ${COMPAT_VERSION}" "${LLVMToolchainDir}/Info.plist"
-                  COMMAND /usr/libexec/PlistBuddy -c "Add:DisplayName string HikariObfuscator" "${LLVMToolchainDir}/Info.plist"
-                  COMMAND /usr/libexec/PlistBuddy -c "Add:ShortDisplayName string HikariObfuscator" "${LLVMToolchainDir}/Info.plist"
+                  COMMAND /usr/libexec/PlistBuddy -c "Add:DisplayName string Hikari" "${LLVMToolchainDir}/Info.plist"
+                  COMMAND /usr/libexec/PlistBuddy -c "Add:ShortDisplayName string Hikari" "${LLVMToolchainDir}/Info.plist"
+                  # Override Settings
+                  COMMAND /usr/libexec/PlistBuddy -c "Add:OverrideBuildSettings dict" "${LLVMToolchainDir}/Info.plist"
+                  # Disable Bitcode, Apparently
+                  COMMAND /usr/libexec/PlistBuddy -c "Add:OverrideBuildSettings:ENABLE_BITCODE string NO" "${LLVMToolchainDir}/Info.plist"
+                  # Corresponds to Enable Index While Building
+                  COMMAND /usr/libexec/PlistBuddy -c "Add:OverrideBuildSettings:COMPILER_INDEX_STORE_ENABLE string NO" "${LLVMToolchainDir}/Info.plist"
                   )
 
 add_custom_target(build-xcode-toolchain
