@@ -29,10 +29,10 @@
 #include "llvm/Pass.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Config/config.h"
 #include "llvm/Transforms/Obfuscation/Obfuscation.h"
 #include <algorithm>
 #include <cstdlib>
-#include <dlfcn.h>
 #include <fstream>
 #include <iostream>
 #include <regex>
@@ -40,10 +40,14 @@
 using namespace llvm;
 using namespace std;
 using json = nlohmann::json;
-static cl::opt<string>
+/*static cl::opt<string>
     SymbolConfigPath("fcoconfig",
                      cl::desc("FunctionCallObfuscate Configuration Path"),
-                     cl::value_desc("filename"), cl::init("+-x/"));
+                     cl::value_desc("filename"), cl::init("+-x/"));*/
+extern cl::opt<string> SymbolConfigPath;
+static const int DARWIN_FLAG=0x2|0x8;
+static const int ANDROID64_FLAG=0x00002|0x100;
+static const int ANDROID32_FLAG=0x0000|0x2;
 namespace llvm {
 struct FunctionCallObfuscate : public FunctionPass {
   static char ID;
@@ -54,6 +58,7 @@ struct FunctionCallObfuscate : public FunctionPass {
   StringRef getPassName() const override {
     return StringRef("FunctionCallObfuscate");
   }
+
   virtual bool doInitialization(Module &M) override {
     // Basic Defs
     if (SymbolConfigPath == "+-x/") {
@@ -153,13 +158,16 @@ struct FunctionCallObfuscate : public FunctionPass {
   void HandleObjC(Module &M) {
     // Iterate all CLASSREF uses and replace with objc_getClass() call
     // Strings are encrypted in other passes
+    vector<GlobalVariable *> toDelete;
     for (auto G = M.global_begin(); G != M.global_end(); G++) {
       GlobalVariable &GV = *G;
-      if (GV.getName().str().find("OBJC_CLASSLIST_REFERENCES") == 0) {
+      if (GV.getName().find("OBJC_CLASSLIST_REFERENCES") != string::npos) {
         if (GV.hasInitializer()) {
           string className = GV.getInitializer()->getName();
           className.replace(className.find("OBJC_CLASS_$_"),
                             strlen("OBJC_CLASS_$_"), "");
+          errs() << "[FunctionCallObfuscate]Replacing ObjC Class:" << className
+                 << "\n";
           for (auto U = GV.user_begin(); U != GV.user_end(); U++) {
             if (Instruction *I = dyn_cast<Instruction>(*U)) {
               IRBuilder<> builder(I);
@@ -175,15 +183,28 @@ struct FunctionCallObfuscate : public FunctionPass {
               I->eraseFromParent();
             }
           }
-          GV.removeDeadConstantUsers();
-          if (GV.getNumUses() == 0) {
-            GV.dropAllReferences();
-            GV.eraseFromParent();
+          GlobalVariable *GV2 = dyn_cast<GlobalVariable>(
+              GV.getInitializer()->stripPointerCasts());
+          for (auto U = GV2->user_begin(); U != GV2->user_end(); U++) {
+            if (Instruction *I = dyn_cast<Instruction>(*U)) {
+              IRBuilder<> builder(I);
+              Function *objc_getClass_Func =
+                  cast<Function>(M.getFunction("objc_getClass"));
+              Value *newClassName =
+                  builder.CreateGlobalStringPtr(StringRef(className));
+              CallInst *CI =
+                  builder.CreateCall(objc_getClass_Func, {newClassName});
+              // We need to bitcast it back to avoid IRVerifier
+              Value *BCI = builder.CreateBitCast(CI, I->getType());
+              I->replaceAllUsesWith(BCI);
+              I->eraseFromParent();
+            }
           }
+          toDelete.push_back(&GV);
         }
       }
       // Selector Convert
-      else if (GV.getName().str().find("OBJC_SELECTOR_REFERENCES") == 0) {
+      else if (GV.getName().find("OBJC_SELECTOR_REFERENCES") != string::npos) {
         if (GV.hasInitializer()) {
           ConstantExpr *CE = dyn_cast<ConstantExpr>(GV.getInitializer());
           Constant *C = CE->getOperand(0);
@@ -191,6 +212,8 @@ struct FunctionCallObfuscate : public FunctionPass {
           ConstantDataArray *CDA =
               dyn_cast<ConstantDataArray>(SELNameGV->getInitializer());
           StringRef SELName = CDA->getAsString(); // This is REAL Selector Name
+          errs() << "[FunctionCallObfuscate]Replacing ObjC SEL:" << SELName
+                 << "\n";
           for (auto U = GV.user_begin(); U != GV.user_end(); U++) {
             if (Instruction *I = dyn_cast<Instruction>(*U)) {
               IRBuilder<> builder(I);
@@ -205,12 +228,27 @@ struct FunctionCallObfuscate : public FunctionPass {
               I->eraseFromParent();
             }
           }
-          GV.removeDeadConstantUsers();
-          if (GV.getNumUses() == 0) {
-            GV.dropAllReferences();
-            GV.eraseFromParent();
-          }
+          toDelete.push_back(&GV);
         }
+      }
+    }
+
+    // Perform cleanup
+    for (GlobalVariable *G : toDelete) {
+      GlobalVariable &GV = *G;
+      removeFromCompilerUsed(M, &GV);
+      GlobalValue *init =
+          cast<GlobalValue>(GV.getInitializer()->stripPointerCasts());
+      GV.removeDeadConstantUsers();
+      if (GV.user_empty()) {
+        GV.dropAllReferences();
+        GV.eraseFromParent();
+      }
+      removeFromCompilerUsed(M, init);
+      init->removeDeadConstantUsers();
+      if (init->user_empty()) {
+        init->dropAllReferences();
+        init->eraseFromParent();
       }
     }
   }
@@ -219,9 +257,13 @@ struct FunctionCallObfuscate : public FunctionPass {
     if (toObfuscate(flag, &F, "fco") == false) {
       return false;
     }
+    Triple Tri(F.getParent()->getTargetTriple());
+    if(!Tri.isAndroid() && !Tri.isOSDarwin()){
+      errs()<<"[FunctionCallObfuscate]Unsupported Target Triple:"<<F.getParent()->getTargetTriple()<<"\n";
+      return false;
+    }
     errs() << "Running FunctionCallObfuscate On " << F.getName() << "\n";
     Module *M = F.getParent();
-    FixFunctionConstantExpr(&F);
     HandleObjC(*M);
     Type *Int32Ty = Type::getInt32Ty(M->getContext());
     Type *Int8PtrTy = Type::getInt8PtrTy(M->getContext());
@@ -281,8 +323,26 @@ struct FunctionCallObfuscate : public FunctionPass {
             IRBuilder<> IRB(EntryBlock, EntryBlock->getFirstInsertionPt());
             vector<Value *> dlopenargs;
             dlopenargs.push_back(Constant::getNullValue(Int8PtrTy));
-            dlopenargs.push_back(
-                ConstantInt::get(Int32Ty, RTLD_NOW | RTLD_GLOBAL));
+            if(Tri.isOSDarwin()){
+              dlopenargs.push_back(
+                  ConstantInt::get(Int32Ty,DARWIN_FLAG));
+            }
+            else if(Tri.isAndroid()){
+              if(Tri.isArch64Bit()){
+                dlopenargs.push_back(
+                    ConstantInt::get(Int32Ty,ANDROID64_FLAG));
+              }
+              else{
+                dlopenargs.push_back(
+                    ConstantInt::get(Int32Ty,ANDROID32_FLAG));
+              }
+
+            }
+            else{
+              errs()<<"[FunctionCallObfuscate]Unsupported Target Triple:"<<F.getParent()->getTargetTriple()<<"\n";
+              return false;
+            }
+
             Value *Handle =
                 IRB.CreateCall(dlopen_decl, ArrayRef<Value *>(dlopenargs));
             // Create dlsym call
