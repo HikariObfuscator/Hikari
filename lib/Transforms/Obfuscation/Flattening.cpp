@@ -11,10 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Transforms/Obfuscation/Flattening.h"
-#include "llvm/Bitcode/BitcodeWriter.h"
+#include "llvm/Transforms/Obfuscation/Obfuscation.h"
 #include "llvm/Transforms/Obfuscation/CryptoUtils.h"
-#include "llvm/Transforms/Scalar.h"
 #include <fcntl.h>
 #include <sys/stat.h>
 
