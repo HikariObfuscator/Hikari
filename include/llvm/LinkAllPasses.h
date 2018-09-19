@@ -54,6 +54,7 @@
 #include "llvm/Transforms/Utils/SymbolRewriter.h"
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 #include "llvm/Transforms/Vectorize.h"
+#include "llvm/Transforms/Obfuscation/Obfuscation.h"
 #include <cstdlib>
 
 namespace {
