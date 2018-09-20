@@ -241,8 +241,8 @@ bool Flattening::flatten(Function *f) {
       continue;
     }
   }
-
+  errs()<<"Fixing Stack\n";
   fixStack(f);
-
+  errs()<<"Fixed Stack\n";
   return true;
 }
