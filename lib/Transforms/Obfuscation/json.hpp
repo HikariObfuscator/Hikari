@@ -44,6 +44,7 @@ SOFTWARE.
 #include <numeric> // accumulate
 #include <string> // string, stoi, to_string
 #include <utility> // declval, forward, move, pair, swap
+#include <cstdlib> // Force include std::abort
 
 // #include <nlohmann/json_fwd.hpp>
 #ifndef NLOHMANN_JSON_FWD_HPP
