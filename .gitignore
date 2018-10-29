@@ -46,23 +46,6 @@ autoconf/autom4te.cache
 # Directories to ignore (do not add trailing '/'s, they skip symlinks).
 #==============================================================================#
 # External projects that are tracked independently.
-projects/*
-!projects/*.*
-!projects/Makefile
-runtimes/*
-!runtimes/*.*
-# Clang, which is tracked independently.
-tools/clang
-# LLDB, which is tracked independently.
-tools/lldb
-# lld, which is tracked independently.
-tools/lld
-# llgo, which is tracked independently.
-tools/llgo
-# Polly, which is tracked independently.
-tools/polly
-# avrlit, which is tracked independently.
-tools/avrlit
 # Sphinx build tree, if building in-source dir.
 docs/_build
 # VS2017 and VSCode config files.
