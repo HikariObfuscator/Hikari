@@ -10,7 +10,7 @@
 #include <set>
 void fixStack(llvm::Function *f);
 std::string readAnnotate(llvm::Function *f);
-map<llvm::GlobalValue*,llvm::StringRef> BuildAnnotateMap(llvm::Module& M);
+std::map<llvm::GlobalValue*,llvm::StringRef> BuildAnnotateMap(llvm::Module& M);
 bool toObfuscate(bool flag, llvm::Function *f, std::string attribute);
 void FixBasicBlockConstantExpr(llvm::BasicBlock *BB);
 void FixFunctionConstantExpr(llvm::Function *Func);
