@@ -8,14 +8,11 @@
 #include <sstream>
 #include <map>
 #include <set>
-using namespace std;
-using namespace llvm;
-
-void fixStack(Function *f);
-std::string readAnnotate(Function *f);
-map<GlobalValue*,StringRef> BuildAnnotateMap(Module& M);
-bool toObfuscate(bool flag, Function *f, std::string attribute);
-void FixBasicBlockConstantExpr(BasicBlock *BB);
-void FixFunctionConstantExpr(Function *Func);
-void appendToAnnotations(Module &M,ConstantStruct *Data);
+void fixStack(llvm::Function *f);
+std::string readAnnotate(llvm::Function *f);
+map<llvm::GlobalValue*,llvm::StringRef> BuildAnnotateMap(llvm::Module& M);
+bool toObfuscate(bool flag, llvm::Function *f, std::string attribute);
+void FixBasicBlockConstantExpr(llvm::BasicBlock *BB);
+void FixFunctionConstantExpr(llvm::Function *Func);
+void appendToAnnotations(llvm::Module &M,llvm::ConstantStruct *Data);
 #endif
