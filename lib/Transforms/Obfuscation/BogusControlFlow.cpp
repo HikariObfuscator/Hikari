@@ -3,6 +3,15 @@
     The main modification is the branching condition is calculated on-the-fly
     Instead of hard-code the always true condition. Relicensed from NCSA license
    to AGPL Copyright (C) 2017 Zhang(https://github.com/Naville/)
+   // Hikari is relicensed from Obfuscator-LLVM and LLVM upstream's permissive NCSA license
+   // to GNU Affero General Public License Version 3 with exceptions listed below.
+   // tl;dr: The obfuscated LLVM IR and/or obfuscated binary is not restricted in anyway,
+   // however any other project containing code from Hikari needs to be open source and licensed under AGPLV3 as well, even for web-based obfuscation services.
+   //
+   // Exceptions:
+   // Anyone who has associated with ByteDance in anyway at any past, current, future time point is prohibited from direct using this piece of software or create any derivative from it
+   //
+   //===----------------------------------------------------------------------===//
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published

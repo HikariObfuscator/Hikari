@@ -1,4 +1,17 @@
 
+// Hikari is relicensed from Obfuscator-LLVM and LLVM upstream's permissive NCSA license
+// to GNU Affero General Public License Version 3 with exceptions listed below.
+// tl;dr: The obfuscated LLVM IR and/or obfuscated binary is not restricted in anyway,
+// however any other project containing code from Hikari needs to be open source and licensed under AGPLV3 as well, even for web-based obfuscation services.
+//
+// Exceptions:
+// Anyone who has associated with ByteDance in anyway at any past, current, future time point is prohibited from direct using this piece of software or create any derivative from it
+//
+//===----------------------------------------------------------------------===//
+
+
+
+------------------------------------
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 
