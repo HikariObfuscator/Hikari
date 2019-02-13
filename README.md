@@ -58,6 +58,9 @@ git clone -b release_70 https://github.com/HikariObfuscator/Hikari.git Hikari &&
 ## Building issues
 - ```CMake Error at tools/xcode-toolchain/CMakeLists.txt:80 (message): Could not identify toolchain dir```
  Make sure you have Xcode installed and ``xcode-select -p`` points to ``/Applications/Xcode.app/Contents/Developer`` instead of the standalone macOS Toolchain
+ 
+## Compilation Issues
+``fatal error: error in backend: Section too large, can't encode r_address (0x100006a) into 24 bits of scattered relocation entry.`` The obfuscated LLVM IR is way too complicated for proper relocation encoding in MachO, try adjust the obfuscation arguments a bit. Reference: [lib/Target/X86/MCTargetDesc/X86MachObjectWriter.cpp](https://github.com/llvm/llvm-project/blob/2946cd701067404b99c39fb29dc9c74bd7193eb3/llvm/lib/Target/X86/MCTargetDesc/X86MachObjectWriter.cpp#L418)
 
 ## Other Apple Compatibility Issues
 Apple's Xcode uses a modified LLVM 6.0(~) to speed up build time and stuff. While Apple has stated they do plan to backport their changes back to the open-source LLVM, so far directly using LLVM upstream in Xcode still has some compatibility issues.
