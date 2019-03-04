@@ -58,7 +58,7 @@ git clone -b release_70 https://github.com/HikariObfuscator/Hikari.git Hikari &&
 ## Building issues
 - ```CMake Error at tools/xcode-toolchain/CMakeLists.txt:80 (message): Could not identify toolchain dir```
  Make sure you have Xcode installed and ``xcode-select -p`` points to ``/Applications/Xcode.app/Contents/Developer`` instead of the standalone macOS Toolchain
- 
+
 ## Compilation Issues
 ``fatal error: error in backend: Section too large, can't encode r_address (0x100006a) into 24 bits of scattered relocation entry.`` The obfuscated LLVM IR is way too complicated for proper relocation encoding in MachO, try adjust the obfuscation arguments a bit. Reference: [lib/Target/X86/MCTargetDesc/X86MachObjectWriter.cpp](https://github.com/llvm/llvm-project/blob/2946cd701067404b99c39fb29dc9c74bd7193eb3/llvm/lib/Target/X86/MCTargetDesc/X86MachObjectWriter.cpp#L418)
 
@@ -70,6 +70,52 @@ Apple's Xcode uses a modified LLVM 6.0(~) to speed up build time and stuff. Whil
 It's probably less troublesome to port Hikari back to Apple's [SwiftLLVM](https://github.com/apple/swift), which you can find a simple tutorial on my [blog](https://mayuyu.io/2018/02/13/Porting-Hikari-to-Swift-Clang/), that being said setting the source up for the port is not for the faint hearted and each compilation takes more than three hours.
 
 Or alternatively, you could try using [HikariObfuscator/NatsukoiHanabi](https://github.com/HikariObfuscator/NatsukoiHanabi) which injects the obfuscation code into Apple Clang, this is the least stable implementation but it at least works straight out of the box
+
+## CocoaPods Integration
+If you are using CocoaPods in your project, the following CocoaPods script by [@chenxk-j](https://github.com/chenxk-j) solves the aforementioned issues once and for all.
+
+```
+clang_rt_search_path = '/Library/Developer/Toolchains/Hikari.xctoolchain/usr/lib/clang/10.0.0/lib/darwin/'
+# This path is different depending on how you are installing Hikari
+# The 10.0.0 part depends on Xcode version and will change to 11.0.0 when Xcode enters 11.0.0 era
+# Below is the alternative path if you are not using the pkg installer and are building and installing from source
+# clang_rt_search_path = '~/Library/Developer/Toolchains/Hikari.xctoolchain/usr/lib/clang/10.0.0/lib/darwin/'
+
+post_install do |installer|
+    generator_group = installer.pods_project.main_group.find_subpath("Frameworks", true)
+    files_references_hash = Hash.new
+    installer.pods_project.targets.each do |target|
+        #Issues:Undefined symbols ___isOSVersionAtLeast when use #ifdef __IPHONE_11_0 #56
+        clang_rt_reference = files_references_hash[target.platform_name.to_s]
+        #防止重复添加
+        if clang_rt_reference == nil
+        #根据target的platform值获取libclang_rt.(ios|tvos|watchos|osx).a
+            clang_rt_path = clang_rt_search_path + 'libclang_rt.'+target.platform_name.to_s+'.a'
+            clang_rt_reference = generator_group.new_reference(clang_rt_path)
+            files_references_hash[target.platform_name.to_s] = clang_rt_reference
+        end
+        target.add_file_references([clang_rt_reference])
+        target.frameworks_build_phase.add_file_reference(clang_rt_reference, true)
+        target.build_configurations.each do |config|
+            #获取原编译配置文件 PBXFileReference
+            origin_build_config = config.base_configuration_reference
+            origin_build_config_parser = Xcodeproj::Config.new(origin_build_config.real_path)
+            #获取原编译配置文件中的 'LIBRARY_SEARCH_PATHS'
+            lib_search_path = origin_build_config_parser.attributes()['LIBRARY_SEARCH_PATHS']
+            if lib_search_path != nil
+                #merge 'LIBRARY_SEARCH_PATHS'
+                config.build_settings['LIBRARY_SEARCH_PATHS'] = lib_search_path + ' ' + clang_rt_search_path
+            else
+                config.build_settings['LIBRARY_SEARCH_PATHS'] = clang_rt_search_path
+            end
+            #ld: loaded libLTO doesn't support -bitcode_hide_symbols: LLVM version 7.0.0 for architecture armv7
+            config.build_settings['HIDE_BITCODE_SYMBOLS'] = 'NO'
+            #Issues:-index-store-path cannot specify -o when generating multiple output files
+            config.build_settings['COMPILER_INDEX_STORE_ENABLE'] = 'NO'
+        end
+    end
+end
+```
 
 # Building on Unix
 Most parts are the same, you just remove all the commands related to Xcode
