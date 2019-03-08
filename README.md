@@ -3,7 +3,7 @@
 [English Documentation](https://github.com/HikariObfuscator/Hikari/wiki)   
 Hikari(Light in Japanese, name stolen from the Nintendo Switch game [Xenoblade Chronicles 2](http://www.nintendo.co.uk/Games/Nintendo-Switch/Xenoblade-Chronicles-2-1233955.html)) is my hackathon-ish toy project for the 2017 Christmas to kill time.It's already stable enough to use in production environment. However, as initially planned, Hikari  has been ported to LLVM 6.0 release version and no longer being actively maintained due to the time and effort it takes. You can find the history of its development at ``developer`` branch. Note that updates are not backported so you should probably always stick to the latest branch (``release_70`` at the time of writing). When newer LLVM versions got released, a new branch will be created containing the latest complete toolchain assembled from the release tarballs with Obfuscation Passes injected in.
 # License
-Hikari is relicensed from Obfuscator-LLVM and LLVM upstream's permissive NCSA license to GNU Affero General Public License Version 3 with exceptions listed below. tl;dr: The obfuscated LLVM IR and/or obfuscated binary is not restricted in anyway, however **any other project containing code from Hikari needs to be open source and licensed under AGPLV3 as well, even for web-based obfuscation services**. __**Even if your project doesn't contain any code from Hikari but rather limited to Libraries/Object Files containing code from Hikari, you'll still need to open-source your project under AGPLV3**__ , according to AGPLV3 License Text which you should have known in the beginning but I didn't explain carefully before
+Hikari is relicensed from Obfuscator-LLVM and LLVM upstream's permissive NCSA license to GNU Affero General Public License Version 3 with exceptions listed below. tl;dr: The obfuscated LLVM IR and/or obfuscated binary is not restricted in anyway, however **any other project containing code from Hikari needs to be open source and licensed under AGPLV3 as well, even for web-based obfuscation services**. __**Even if your project doesn't contain any code from Hikari but rather linked to Libraries/Object Files containing code from Hikari, you'll still need to open-source your project under AGPLV3**__ , according to AGPLV3 License Text which you should have known in the beginning but I didn't explain carefully before
 
 ## Exceptions
 - Anyone who has associated with ByteDance in anyway at any past, current, future time point is prohibited from direct using this piece of software or create any derivative from it
@@ -83,12 +83,8 @@ clang_rt_search_path = '/Library/Developer/Toolchains/Hikari.xctoolchain/usr/lib
 post_install do |installer|
     generator_group = installer.pods_project.main_group.find_subpath("Frameworks", true)
     files_references_hash = Hash.new
-    installer.pods_project.targets.each do |target|
-        #Issues:Undefined symbols ___isOSVersionAtLeast when use #ifdef __IPHONE_11_0 #56
         clang_rt_reference = files_references_hash[target.platform_name.to_s]
-        #防止重复添加
         if clang_rt_reference == nil
-        #根据target的platform值获取libclang_rt.(ios|tvos|watchos|osx).a
             clang_rt_path = clang_rt_search_path + 'libclang_rt.'+target.platform_name.to_s+'.a'
             clang_rt_reference = generator_group.new_reference(clang_rt_path)
             files_references_hash[target.platform_name.to_s] = clang_rt_reference
@@ -96,13 +92,10 @@ post_install do |installer|
         target.add_file_references([clang_rt_reference])
         target.frameworks_build_phase.add_file_reference(clang_rt_reference, true)
         target.build_configurations.each do |config|
-            #获取原编译配置文件 PBXFileReference
             origin_build_config = config.base_configuration_reference
             origin_build_config_parser = Xcodeproj::Config.new(origin_build_config.real_path)
-            #获取原编译配置文件中的 'LIBRARY_SEARCH_PATHS'
             lib_search_path = origin_build_config_parser.attributes()['LIBRARY_SEARCH_PATHS']
             if lib_search_path != nil
-                #merge 'LIBRARY_SEARCH_PATHS'
                 config.build_settings['LIBRARY_SEARCH_PATHS'] = lib_search_path + ' ' + clang_rt_search_path
             else
                 config.build_settings['LIBRARY_SEARCH_PATHS'] = clang_rt_search_path
