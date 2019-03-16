@@ -118,7 +118,7 @@ struct FunctionWrapper : public ModulePass {
     // FIXME: Correctly Steal Function Attributes
     //func->addFnAttr(Attribute::AttrKind::OptimizeNone);
     //func->addFnAttr(Attribute::AttrKind::NoInline);
-    func->copyAttributesFrom(cast<Function>(calledFunction));
+    //func->copyAttributesFrom(cast<Function>(calledFunction));
     func->setDSOLocal(true);
     BasicBlock *BB = BasicBlock::Create(func->getContext(), "", func);
     IRBuilder<> IRB(BB);
