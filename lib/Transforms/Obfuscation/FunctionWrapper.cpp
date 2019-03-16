@@ -110,8 +110,10 @@ struct FunctionWrapper : public ModulePass {
     FunctionType *ft =
         FunctionType::get(CS->getType(), ArrayRef<Type *>(types), false);
     Function *func =
-        Function::Create(ft, GlobalValue::LinkageTypes::InternalLinkage,
+        Function::Create(ft, GlobalValue::LinkageTypes::PrivateLinkage,
                          "HikariFunctionWrapper", CS->getParent()->getModule());
+      //Trolling was all fun and shit so old implementation forced this symbol to exist in all objects
+      //Meh
     appendToCompilerUsed(*func->getParent(), {func});
     // FIXME: Correctly Steal Function Attributes
     //func->addFnAttr(Attribute::AttrKind::OptimizeNone);
