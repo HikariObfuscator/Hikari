@@ -121,7 +121,8 @@ You can either use a UNIX-Like environment like MinGW / Cygwin (Based upon commu
 
 Plus, even if you managed to get things working, there is a chance that the LLVM Frontend Clang won't accept your code (Google ``MSVC nonstandard behavior``), so if you are using some non-standard compatible code, you might as well fall back to alternative solutions on Windows
 
-# Extra Features in Commercial Version:
+# Commercial Version:
+## Extra Features
 - GlobalVariable Reference Obfuscation
 - Target Jump Address in IndirectBranch Obfuscation
 - Anti Disassembler on Certain Archs
@@ -134,8 +135,19 @@ Plus, even if you managed to get things working, there is a chance that the LLVM
 - Other features
 - And many bug fixes
 
-# Work In Progress Features in Commercial Version
+##  Work In Progress Features in Commercial Version
 - C++ RTTI Obfuscation
+
+## But where do I buy it
+As much as I'd love to profit a few thousands dollars a year from each user, you probably shouldn't. The open-source version is more than enough to defeat 99% of the script kiddies and hackers out there. The only cases you actually need the private version are:
+
+- I'm too rich and I simply want the best
+- My product contains very sensitive algorithms that needs to be well-protected.
+
+Other than that, for usage scenarios like a DRM verification for your software, proper algorithm level implementation plus the open-source version of Hikari is probably a better choice.
+
+## Still want it?
+Send me an email after July 2019 so we can discuss further
 
 # Demo   
 **This only demonstrates a limited part of Hikari's capabilities. Download the complete demo and analyze yourself, link in the documentation**  
