@@ -57,6 +57,18 @@ git clone -b release_70 https://github.com/HikariObfuscator/Hikari.git Hikari &&
 ## Building issues
 - ```CMake Error at tools/xcode-toolchain/CMakeLists.txt:80 (message): Could not identify toolchain dir```
  Make sure you have Xcode installed and ``xcode-select -p`` points to ``/Applications/Xcode.app/Contents/Developer`` instead of the standalone macOS Toolchain
+ 
+## Android/ELF Linking Issues
+Due to probably some issues with Android Toolchain's Link Time Optimizations, you will probably get a error message like the following:
+```
+Warning: relocation refers to discarded section
+```
+In which case just add the following to the project's Linker Flags:
+
+```
+-Wno-error=all -Wl,--no-fatal-warnings
+```
+If someone knows more about ELF/Android than I do please let me know.
 
 ## Compilation Issues
 ``fatal error: error in backend: Section too large, can't encode r_address (0x100006a) into 24 bits of scattered relocation entry.`` The obfuscated LLVM IR is way too complicated for proper relocation encoding in MachO, try adjust the obfuscation arguments a bit. Reference: [lib/Target/X86/MCTargetDesc/X86MachObjectWriter.cpp](https://github.com/llvm/llvm-project/blob/2946cd701067404b99c39fb29dc9c74bd7193eb3/llvm/lib/Target/X86/MCTargetDesc/X86MachObjectWriter.cpp#L418)
