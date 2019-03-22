@@ -144,6 +144,8 @@ Plus, even if you managed to get things working, there is a chance that the LLVM
 - Support all terminators in Flattening, open-source version simply skips the whole function if it contains unsupported instruction
 - Virtualization
 - Syscall Lowering
+- Function Splitting
+- Anti Runtime Hook
 - Other features
 - And many bug fixes
 
