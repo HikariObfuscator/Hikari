@@ -1,0 +1,8 @@
+[submodule "lib/Transforms/Obfuscation"]
+	path = lib/Transforms/Obfuscation
+	url = https://github.com/HikariObfuscator/Core.git
+	branch = master
+[submodule "include/llvm/Transforms/Obfuscation"]
+	path = include/llvm/Transforms/Obfuscation
+	url = https://github.com/HikariObfuscator/Headers.git
+	branch = master
