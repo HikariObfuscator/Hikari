@@ -1,12 +1,16 @@
+# Deprecated
+
+As a toy project, Hikari had way too many design issues that makes it irrelavant in modern binary protection.  
+You really shouldn't be using it anymore, instead, switch to a commercially supported implementation. 
+If you absolutely must use Hikari, switch to a actively maintained fork like [NeHyci/Hikari-LLVM15](https://github.com/NeHyci/Hikari-LLVM15) where I occasionally show up and provide some insights / hints/ help.
+
+I also occasionally analyze existing open-source/commericial LLVM obfuscators in a professional setup, for analysis reports that are not restricted by an NDA, you can see a stripped down version of my reports [here](https://github.com/Naville/Nitpicking-OpenSourceObfuscators)
+
+
 # Hikari
 
 [English Documentation](https://github.com/HikariObfuscator/Hikari/wiki)   
 Hikari(Light in Japanese, name stolen from the Nintendo Switch game [Xenoblade Chronicles 2](http://www.nintendo.co.uk/Games/Nintendo-Switch/Xenoblade-Chronicles-2-1233955.html)) is [Naville](https://github.com/Naville)'s 2017 Christmas Toy Project. 
-
-Since 2020/01/30, the open-source version of Hikari is instead maintained by the following team:
-
-- [@nullpixel](https://github.com/nullpixel)
-- [@woachk](https://github.com/woachk)
 
 New features are not expected to be open-sourced and instead the focus would be compatibility with future LLVM versions and Xcode versions.
 
